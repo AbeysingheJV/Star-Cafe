@@ -1,8 +1,7 @@
-// CuttableItem.cs
 using UnityEngine;
-using UnityEngine.UI; // Needed for Slider
+using UnityEngine.UI; 
 
-// Ensure PickupableItem exists if inheriting, or just RequireComponent if separate
+
 [RequireComponent(typeof(PickupableItem))]
 public class CuttableItem : MonoBehaviour
 {
@@ -15,14 +14,14 @@ public class CuttableItem : MonoBehaviour
 
 	[Header("UI Feedback (Optional)")]
 	[Tooltip("Assign a UI Slider to show cutting progress.")]
-	[SerializeField] private Slider progressBar; // Assign in Inspector
+	[SerializeField] private Slider progressBar; 
 
 	private float currentCutProgress = 0f;
 	private bool isBeingCut = false;
 
 	void Start()
 	{
-		// Initialize progress bar (hide it initially)
+		
 		if (progressBar != null)
 		{
 			progressBar.gameObject.SetActive(false);
@@ -32,10 +31,10 @@ public class CuttableItem : MonoBehaviour
 		}
 	}
 
-	// Called by the Interaction Controller when cutting starts
+	
 	public void StartCutting()
 	{
-		if (isBeingCut || cutPrefab == null) return; // Don't restart if already cutting or no prefab
+		if (isBeingCut || cutPrefab == null) return; 
 
 		Debug.Log($"Started cutting {gameObject.name}");
 		isBeingCut = true;
@@ -48,7 +47,7 @@ public class CuttableItem : MonoBehaviour
 		}
 	}
 
-	// Called by the Interaction Controller every frame while interact is held
+	
 	public bool UpdateCutting(float deltaTime)
 	{
 		if (!isBeingCut) return false;
@@ -63,12 +62,12 @@ public class CuttableItem : MonoBehaviour
 		if (currentCutProgress >= cutTime)
 		{
 			CompleteCutting();
-			return true; // Cutting completed
+			return true; 
 		}
-		return false; // Cutting in progress
+		return false; 
 	}
 
-	// Called by the Interaction Controller if interact is released early
+	
 	public void CancelCutting()
 	{
 		if (!isBeingCut) return;
@@ -84,41 +83,39 @@ public class CuttableItem : MonoBehaviour
 		}
 	}
 
-	// Called internally or by UpdateCutting when time is reached
+	
 	private void CompleteCutting()
 	{
-		if (!isBeingCut || cutPrefab == null) return; // Prevent double execution
+		if (!isBeingCut || cutPrefab == null) return; 
 
 		Debug.Log($"Finished cutting {gameObject.name}");
-		isBeingCut = false; // Stop further updates
+		isBeingCut = false;
 
-		// Instantiate the cut version at the same position and rotation
+		
 		Instantiate(cutPrefab, transform.position, transform.rotation);
 
 		if (progressBar != null)
 		{
-			progressBar.gameObject.SetActive(false); // Hide progress bar
+			progressBar.gameObject.SetActive(false); 
 		}
 
 
-		// Destroy the original whole item
+		
 		Destroy(gameObject);
 	}
 
-	// Optional: Ensure progress bar is linked to this item's position if it's world-space
+	
 	void Update()
 	{
 		if (progressBar != null && progressBar.gameObject.activeSelf && progressBar.GetComponentInParent<Canvas>().renderMode == RenderMode.WorldSpace)
 		{
-			// Keep the world-space progress bar positioned near the item
-			// This might need adjustment based on your specific UI setup
-			// Example: Position it slightly above the item
-			progressBar.transform.position = transform.position + Vector3.up * 0.5f; // Adjust offset as needed
-																					 // Make it face the camera (optional)
+			
+			progressBar.transform.position = transform.position + Vector3.up * 0.5f; 
+																					 
 			if (Camera.main != null)
 			{
 				progressBar.transform.LookAt(Camera.main.transform);
-				progressBar.transform.Rotate(0, 180, 0); // Adjust if it faces away
+				progressBar.transform.Rotate(0, 180, 0); 
 			}
 		}
 	}

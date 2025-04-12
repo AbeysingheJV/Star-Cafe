@@ -1,4 +1,3 @@
-// PlayerInputHandler.cs
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Events;
@@ -14,24 +13,24 @@ public class PlayerInputHandler : MonoBehaviour
 	[Header("Action Name References")]
 	[SerializeField] private string movement = "Movement";
 	[SerializeField] private string rotation = "Rotation";
-	[SerializeField] private string interact = "Interact"; // For E key (Pickup/Place)
-	[SerializeField] private string cookAction = "CookAction"; // *** NEW: For Q key (Cut/Cook etc.) ***
+	[SerializeField] private string interact = "Interact";
+	[SerializeField] private string cookAction = "CookAction"; 
 
 	private InputAction movementAction;
 	private InputAction rotationAction;
 	private InputAction interactAction;
-	private InputAction cookActionInput; // *** NEW ***
+	private InputAction cookActionInput; 
 
 	public Vector2 MovementInput { get; private set; }
 	public Vector2 RotationInput { get; private set; }
 
-	// Events for Interact (E)
-	public UnityAction OnInteractStartedAction; // Called when E is pressed
-	public UnityAction OnInteractCanceledAction; // Called when E is released
+	
+	public UnityAction OnInteractStartedAction;
+	public UnityAction OnInteractCanceledAction; 
 
-	// *** NEW: Events for CookAction (Q) ***
-	public UnityAction OnCookActionStartedAction; // Called when Q is pressed
-	public UnityAction OnCookActionCanceledAction; // Called when Q is released
+	
+	public UnityAction OnCookActionStartedAction; 
+	public UnityAction OnCookActionCanceledAction; 
 
 	private void Awake()
 	{
@@ -46,10 +45,10 @@ public class PlayerInputHandler : MonoBehaviour
 		movementAction = mapReference.FindAction(movement);
 		rotationAction = mapReference.FindAction(rotation);
 		interactAction = mapReference.FindAction(interact);
-		cookActionInput = mapReference.FindAction(cookAction); // *** NEW ***
+		cookActionInput = mapReference.FindAction(cookAction);
 
-		// Check if actions exist before subscribing
-		if (movementAction == null || rotationAction == null || interactAction == null || cookActionInput == null) // *** Updated Check ***
+		
+		if (movementAction == null || rotationAction == null || interactAction == null || cookActionInput == null) 
 		{
 			Debug.LogError("One or more Input Actions not found! (Movement, Rotation, Interact, CookAction)");
 			enabled = false;
@@ -73,12 +72,12 @@ public class PlayerInputHandler : MonoBehaviour
 		interactAction.started += InteractStarted;
 		interactAction.canceled += InteractCanceled;
 
-		// *** NEW: CookAction (Q) ***
+		//CookAction (Q)
 		cookActionInput.started += CookActionStarted;
 		cookActionInput.canceled += CookActionCanceled;
 	}
 
-	// --- Handlers for Interact (E) ---
+	
 	private void InteractStarted(InputAction.CallbackContext context)
 	{
 		OnInteractStartedAction?.Invoke();
@@ -89,7 +88,7 @@ public class PlayerInputHandler : MonoBehaviour
 		OnInteractCanceledAction?.Invoke();
 	}
 
-	// --- NEW: Handlers for CookAction (Q) ---
+	
 	private void CookActionStarted(InputAction.CallbackContext context)
 	{
 		OnCookActionStartedAction?.Invoke();
@@ -108,21 +107,21 @@ public class PlayerInputHandler : MonoBehaviour
 
 	private void OnDisable()
 	{
-		// Unsubscribe events
+		
 		if (interactAction != null)
 		{
 			interactAction.started -= InteractStarted;
 			interactAction.canceled -= InteractCanceled;
 		}
-		if (cookActionInput != null) // *** NEW ***
+		if (cookActionInput != null) 
 		{
 			cookActionInput.started -= CookActionStarted;
 			cookActionInput.canceled -= CookActionCanceled;
 		}
-		// ... (unsubscribe movement/rotation if needed, careful with anonymous methods)
+		
 
 
-		// Disable the action map
+	
 		playerControls.FindActionMap(actionMapName).Disable();
 	}
 }

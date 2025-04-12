@@ -19,7 +19,7 @@ public class FirstPersonController : MonoBehaviour
 
 	private void Awake()
 	{
-		// Ensure required components exist
+	
 		if (characterController == null)
 			characterController = GetComponent<CharacterController>();
 

@@ -12,5 +12,5 @@ public class PickupableItem : MonoBehaviour
 		Col = GetComponent<Collider>(); 
 	}
 
-	// item-specific properties 
+	
 }
