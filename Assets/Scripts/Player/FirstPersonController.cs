@@ -11,77 +11,71 @@ public class FirstPersonController : MonoBehaviour
 	[SerializeField] private float upDownLookRange = 80f;
 	[SerializeField] private Camera mainCamera;
 
-
-
 	private Vector3 currentMovement;
 	private float verticalRotation;
 	private PlayerInputHandler playerInputHandler;
 
 	private void Awake()
 	{
-	
 		if (characterController == null)
 			characterController = GetComponent<CharacterController>();
-
 		if (mainCamera == null)
-			mainCamera = Camera.main;
+			mainCamera = Camera.main; 
 
 		playerInputHandler = GetComponent<PlayerInputHandler>();
-
-		if (playerInputHandler == null)
+		if (playerInputHandler == null) 
 		{
-			Debug.LogError("PlayerInputHandler component missing from player!");
-			enabled = false;
-			return;
+			Debug.LogError("PlayerInputHandler component missing from player!"); 
+			enabled = false; 
+			return; 
 		}
 	}
 
 	private void Start()
 	{
-		Cursor.lockState = CursorLockMode.Locked;
-		Cursor.visible = false;
+		Cursor.lockState = CursorLockMode.Locked; 
+		Cursor.visible = false; 
 	}
 
 	private void Update()
 	{
-		HandleMovement();
-		HandleRotation();
+		HandleMovement(); 
+		HandleRotation(); 
 	}
 
 	private void HandleMovement()
 	{
-		if (playerInputHandler == null) return;
+		if (playerInputHandler == null) return; 
 
-		Vector2 input = playerInputHandler.MovementInput;
-		Vector3 worldDirection = transform.TransformDirection(new Vector3(input.x, 0f, input.y));
+		Vector2 input = playerInputHandler.MovementInput; 
+		Vector3 worldDirection = transform.TransformDirection(new Vector3(input.x, 0f, input.y)); 
 
-		currentMovement.x = worldDirection.x * walkSpeed;
-		currentMovement.z = worldDirection.z * walkSpeed;
+		currentMovement.x = worldDirection.x * walkSpeed; 
+		currentMovement.z = worldDirection.z * walkSpeed; 
 
-		if (!characterController.isGrounded)
+		if (!characterController.isGrounded) 
 		{
-			currentMovement.y += Physics.gravity.y * Time.deltaTime;
+			currentMovement.y += Physics.gravity.y * Time.deltaTime; 
 		}
 		else
 		{
-			currentMovement.y = 0f;
+			currentMovement.y = 0f; 
 		}
 
-		characterController.Move(currentMovement * Time.deltaTime);
+		characterController.Move(currentMovement * Time.deltaTime); 
 	}
 
 	private void HandleRotation()
 	{
-		if (playerInputHandler == null) return;
+		if (playerInputHandler == null) return; 
 
-		Vector2 input = playerInputHandler.RotationInput;
+		Vector2 input = playerInputHandler.RotationInput; 
 		float mouseXRotation = input.x * mouseSensitivity;
-		float mouseYRotation = input.y * mouseSensitivity;
+		float mouseYRotation = input.y * mouseSensitivity; 
 
-		transform.Rotate(0, mouseXRotation, 0);
+		transform.Rotate(0, mouseXRotation, 0); 
 
-		verticalRotation = Mathf.Clamp(verticalRotation - mouseYRotation, -upDownLookRange, upDownLookRange);
-		mainCamera.transform.localRotation = Quaternion.Euler(verticalRotation, 0, 0);
+		verticalRotation = Mathf.Clamp(verticalRotation - mouseYRotation, -upDownLookRange, upDownLookRange); 
+		mainCamera.transform.localRotation = Quaternion.Euler(verticalRotation, 0, 0); 
 	}
-
 }

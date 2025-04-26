@@ -8,7 +8,7 @@ public class PickupableItem : MonoBehaviour
 
 	void Awake()
 	{
-		Rb = GetComponent<Rigidbody>();
+		Rb = GetComponent<Rigidbody>(); 
 		Col = GetComponent<Collider>(); 
 	}
 

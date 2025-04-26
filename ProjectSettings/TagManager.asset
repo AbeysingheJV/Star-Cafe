@@ -18,8 +18,8 @@ TagManager:
   - Pickupable
   - Counter
   - HeldItem
-  - 
-  - 
+  - IngredientSources
+  - Environment
   - 
   - 
   - 
