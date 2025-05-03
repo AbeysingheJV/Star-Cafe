@@ -15,4 +15,6 @@ MonoBehaviour:
   recipeName: French Fries
   requiredIngredients:
   - {fileID: 11400000, guid: 18bc0ee7ce550c04189162b01ac08915, type: 2}
-  resultPrefab: {fileID: 0}
+  resultPrefab: {fileID: 4601807697355163923, guid: d36569bb27020234ab89e94a4caad313,
+    type: 3}
+  cookingDuration: 2

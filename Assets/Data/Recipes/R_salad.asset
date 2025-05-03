@@ -19,3 +19,4 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 771f7daafa16a59488f164f4b39bca01, type: 2}
   - {fileID: 11400000, guid: 6ba725821809dcc4faff1574e0b2e03a, type: 2}
   resultPrefab: {fileID: 0}
+  cookingDuration: 4

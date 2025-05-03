@@ -8,6 +8,7 @@ TagManager:
   - Table
   - Pickup
   - Cutting Counter
+  - BurgerDish
   layers:
   - Default
   - TransparentFX

@@ -15,7 +15,8 @@ MonoBehaviour:
   recipeName: Chicken Burger
   requiredIngredients:
   - {fileID: 11400000, guid: 925de52daec0b5e4cbd8ad0d3c5b9342, type: 2}
-  - {fileID: 11400000, guid: 74b45cd75cc996c4191f28b7f03c06f8, type: 2}
   - {fileID: 11400000, guid: 388fa9a664d34fb41a57dd1d460db614, type: 2}
-  - {fileID: 11400000, guid: 08af7934e95dbc44cb50778d7e11be99, type: 2}
-  resultPrefab: {fileID: 0}
+  resultPrefab: {fileID: 5959661674729835722, guid: 59ff115253baf144581c8dc65dcdba6f,
+    type: 3}
+  cookingDuration: 5
+  resultDishTag: BurgerDish
