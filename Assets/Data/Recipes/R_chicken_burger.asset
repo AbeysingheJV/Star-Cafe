@@ -16,7 +16,8 @@ MonoBehaviour:
   requiredIngredients:
   - {fileID: 11400000, guid: 925de52daec0b5e4cbd8ad0d3c5b9342, type: 2}
   - {fileID: 11400000, guid: 388fa9a664d34fb41a57dd1d460db614, type: 2}
-  resultPrefab: {fileID: 5959661674729835722, guid: 59ff115253baf144581c8dc65dcdba6f,
+  - {fileID: 11400000, guid: 08af7934e95dbc44cb50778d7e11be99, type: 2}
+  resultPrefab: {fileID: 6082427289346243482, guid: cacb31d6568d5534eb750e2b7afde3e7,
     type: 3}
-  cookingDuration: 5
+  cookingDuration: 7
   resultDishTag: BurgerDish
