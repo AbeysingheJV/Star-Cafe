@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dff3a5c7e8ebc694983786b768e16b0d, type: 3}
+  m_Name: R_BeefBurger
+  m_EditorClassIdentifier: 
+  recipeName: Beef Burger
+  requiredIngredients:
+  - {fileID: 11400000, guid: 925de52daec0b5e4cbd8ad0d3c5b9342, type: 2}
+  - {fileID: 11400000, guid: 08af7934e95dbc44cb50778d7e11be99, type: 2}
+  - {fileID: 11400000, guid: 388fa9a664d34fb41a57dd1d460db614, type: 2}
+  - {fileID: 11400000, guid: 36611c650321a734c9793f10837290bb, type: 2}
+  resultPrefab: {fileID: 5959661674729835722, guid: 5f2138a92e8a8f048bbc3b407c00c5ad,
+    type: 3}
+  cookingDuration: 7
+  resultDishTag: BeefBurgerDish

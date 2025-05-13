@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dff3a5c7e8ebc694983786b768e16b0d, type: 3}
+  m_Name: R_TomatoeCut
+  m_EditorClassIdentifier: 
+  recipeName: Tomatoe Cut
+  requiredIngredients:
+  - {fileID: 11400000, guid: 6ba725821809dcc4faff1574e0b2e03a, type: 2}
+  resultPrefab: {fileID: 6213259828783532099, guid: 7985cb9eff186a545b6d64a3a08f3aa0,
+    type: 3}
+  cookingDuration: 3
+  resultDishTag: 

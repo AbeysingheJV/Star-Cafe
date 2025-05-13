@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dff3a5c7e8ebc694983786b768e16b0d, type: 3}
+  m_Name: R_ChickenCooked
+  m_EditorClassIdentifier: 
+  recipeName: Chicken Cooked
+  requiredIngredients:
+  - {fileID: 11400000, guid: f964524cf3ad01443b1ec538ca25b493, type: 2}
+  resultPrefab: {fileID: 5182101408359990397, guid: bb8cc04489a53cb4aaa2582b212558bb,
+    type: 3}
+  cookingDuration: 6
+  resultDishTag: 

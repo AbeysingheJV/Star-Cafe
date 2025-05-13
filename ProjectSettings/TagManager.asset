@@ -8,7 +8,12 @@ TagManager:
   - Table
   - Pickup
   - Cutting Counter
-  - BurgerDish
+  - ChickenBurgerDish
+  - BeefBurgerDish
+  - EggsandBaconDish
+  - DrinkDish
+  - SaladDish
+  - FriesDish
   layers:
   - Default
   - TransparentFX

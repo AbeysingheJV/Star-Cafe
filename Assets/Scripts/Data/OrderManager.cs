@@ -1,21 +1,27 @@
 using UnityEngine;
 using System.Collections.Generic;
-using TMPro; // Make sure TextMeshPro is imported in Package Manager
+using TMPro;
 
 public class OrderManager : MonoBehaviour
 {
 	[Header("Order Settings")]
-	[SerializeField] private List<RecipeData> possibleOrders; // Assign RecipeData assets in Inspector
-	[SerializeField] private bool randomOrder = true; // Choose randomly or sequentially?
+	[SerializeField] private List<RecipeData> possibleOrders;
+	[SerializeField] private bool randomOrder = true;
 
 	[Header("UI")]
-	[SerializeField] private TextMeshProUGUI currentOrderText; // Assign your UI Text element here
+	[SerializeField] private TextMeshProUGUI currentOrderText;
 
-	[Header("State")]
+	[Header("Audio")]
+	[SerializeField] private AudioClip newOrderSound;
+	[SerializeField] private AudioClip orderCompleteSound;
+
+	[Header("State (Read Only)")]
 	[SerializeField] private RecipeData currentOrder;
 	private int currentOrderIndex = -1;
+	private bool allOrdersDone = false;
 
-	public static OrderManager Instance { get; private set; } // Simple Singleton pattern
+	public static OrderManager Instance { get; private set; }
+	private AudioSource audioSource;
 
 	void Awake()
 	{
@@ -27,6 +33,8 @@ public class OrderManager : MonoBehaviour
 		{
 			Instance = this;
 		}
+		audioSource = GetComponent<AudioSource>(); // Get the AudioSource
+		if (audioSource == null) { Debug.LogWarning("OrderManager requires an AudioSource component for sounds!", this); }
 	}
 
 	void Start()
@@ -47,28 +55,49 @@ public class OrderManager : MonoBehaviour
 
 	void GetNextOrder()
 	{
-		if (possibleOrders.Count == 0) return; // Should not happen after Start check
+		if (allOrdersDone) return; // Stop if all orders were completed and not looping
+
+		if (possibleOrders.Count == 0) return;
 
 		if (randomOrder)
 		{
-			currentOrderIndex = Random.Range(0, possibleOrders.Count);
+			// Avoid picking the same order twice in a row if possible and there's more than one order
+			if (possibleOrders.Count > 1)
+			{
+				int newIndex = currentOrderIndex;
+				while (newIndex == currentOrderIndex)
+				{
+					newIndex = Random.Range(0, possibleOrders.Count);
+				}
+				currentOrderIndex = newIndex;
+			}
+			else
+			{
+				currentOrderIndex = 0; // Only one order, so pick that one
+			}
 		}
-		else
+		else // Sequential
 		{
 			currentOrderIndex++;
 			if (currentOrderIndex >= possibleOrders.Count)
 			{
-				// Optional: Handle what happens when all orders are done (e.g., loop, stop, show message)
-				Debug.Log("All orders completed!");
-				if (currentOrderText != null) currentOrderText.text = "All Done!";
-				currentOrder = null; // No more orders
+				Debug.Log("All sequential orders completed!");
+				if (currentOrderText != null) currentOrderText.text = "All Orders Done!";
+				currentOrder = null;
+				allOrdersDone = true;
+				// Optional: Play a special "all orders complete" sound here
 				return;
-				// Or loop: currentOrderIndex = 0;
 			}
 		}
 
 		currentOrder = possibleOrders[currentOrderIndex];
 		UpdateOrderUI();
+
+		// Play new order sound
+		if (audioSource != null && newOrderSound != null && currentOrder != null)
+		{
+			audioSource.PlayOneShot(newOrderSound);
+		}
 	}
 
 	void UpdateOrderUI()
@@ -77,10 +106,13 @@ public class OrderManager : MonoBehaviour
 		{
 			currentOrderText.text = $"Order: {currentOrder.recipeName}";
 		}
+		else if (currentOrderText != null && allOrdersDone)
+		{
+			currentOrderText.text = "All Orders Done!";
+		}
 		else if (currentOrderText != null)
 		{
-			// Handle case where there might be no current order after completion
-			currentOrderText.text = "";
+			currentOrderText.text = ""; // Clear if no current order for other reasons
 		}
 	}
 
@@ -88,10 +120,9 @@ public class OrderManager : MonoBehaviour
 	{
 		if (currentOrder == null || submittedDish == null)
 		{
-			return false; // No active order or no dish submitted
+			return false;
 		}
 
-		// Check if the submitted dish has the tag defined in the current recipe's Result Dish Tag
 		if (!string.IsNullOrEmpty(currentOrder.resultDishTag) && submittedDish.CompareTag(currentOrder.resultDishTag))
 		{
 			Debug.Log($"Correct dish submitted: {currentOrder.recipeName}");
@@ -99,15 +130,23 @@ public class OrderManager : MonoBehaviour
 		}
 		else
 		{
-			Debug.Log($"Incorrect dish submitted. Expected tag: {currentOrder.resultDishTag}, Submitted object tag: {submittedDish.tag}");
+			Debug.Log($"Incorrect dish submitted. Expected tag: '{currentOrder.resultDishTag}', Submitted object tag: '{submittedDish.tag}'");
 			return false;
 		}
 	}
 
 	public void OrderCompleted()
 	{
-		// Potentially add score, rewards, sound effects here later
+		if (currentOrder == null) return; // Should not happen if CheckOrderCompletion was true
+
 		Debug.Log($"Order '{currentOrder.recipeName}' Completed!");
-		GetNextOrder(); // Immediately fetch the next order
+
+		// Play order complete sound
+		if (audioSource != null && orderCompleteSound != null)
+		{
+			audioSource.PlayOneShot(orderCompleteSound);
+		}
+
+		GetNextOrder();
 	}
 }
