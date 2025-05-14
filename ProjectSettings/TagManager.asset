@@ -14,6 +14,8 @@ TagManager:
   - DrinkDish
   - SaladDish
   - FriesDish
+  - BurgerDish
+  - CatInteractable
   layers:
   - Default
   - TransparentFX
@@ -26,8 +28,8 @@ TagManager:
   - HeldItem
   - IngredientSources
   - Environment
-  - 
-  - 
+  - General_Interactable
+  - CatLayer
   - 
   - 
   - 

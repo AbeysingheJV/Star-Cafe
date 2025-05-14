@@ -1,4 +1,5 @@
 using UnityEngine;
+using static UnityEngine.Rendering.DebugUI.Table;
 
 public class PickupController : MonoBehaviour
 {
@@ -10,9 +11,10 @@ public class PickupController : MonoBehaviour
 	[Header("Interaction Parameters")]
 	[SerializeField] private float interactionDistance = 3f;
 	[SerializeField] private LayerMask pickupLayerMask;
-	[SerializeField] private LayerMask raycastIgnoreLayerMask; // Keep if used, though not in current logic
 	[SerializeField] private LayerMask cookingStationLayerMask;
 	[SerializeField] private LayerMask ingredientSourceLayerMask;
+	[SerializeField] private LayerMask generalInteractableLayerMask; // For Radio
+	[SerializeField] private LayerMask catInteractableLayerMask; // For the Cat
 
 	[Header("Holding Parameters")]
 	[SerializeField] private float positionLerpSpeed = 15f;
@@ -28,8 +30,7 @@ public class PickupController : MonoBehaviour
 	private Collider playerCollider;
 	private int pickupableLayerInt = -1;
 
-	private CookingStation activeCookingStation = null; // For Hold-to-Cook
-														// Removed activeApplianceStation as ApplianceStation is press-once
+	private CookingStation activeCookingStation = null;
 
 	private AudioSource audioSource;
 
@@ -38,12 +39,15 @@ public class PickupController : MonoBehaviour
 		if (inputHandler == null) inputHandler = GetComponent<PlayerInputHandler>();
 		if (mainCamera == null) mainCamera = Camera.main;
 		playerCollider = GetComponent<Collider>();
-		audioSource = GetComponent<AudioSource>(); // Get the AudioSource component
+		audioSource = GetComponent<AudioSource>();
 
 		if (inputHandler == null || mainCamera == null || holdPoint == null) { enabled = false; return; }
-		if (pickupLayerMask == 0) { Debug.LogWarning("PickupLayerMask not set on PickupController.", this); }
-		if (cookingStationLayerMask == 0) { Debug.LogWarning("CookingStationLayerMask not set on PickupController.", this); }
-		if (ingredientSourceLayerMask == 0) { Debug.LogWarning("IngredientSourceLayerMask not set on PickupController.", this); }
+		if (pickupLayerMask.value == 0) Debug.LogWarning("PickupLayerMask not set on PickupController.", this);
+		if (cookingStationLayerMask.value == 0) Debug.LogWarning("CookingStationLayerMask not set on PickupController.", this);
+		if (ingredientSourceLayerMask.value == 0) Debug.LogWarning("IngredientSourceLayerMask not set on PickupController.", this);
+		if (generalInteractableLayerMask.value == 0) Debug.LogWarning("GeneralInteractableLayerMask not set on PickupController.", this);
+		if (catInteractableLayerMask.value == 0) Debug.LogWarning("CatInteractableLayerMask not set on PickupController.", this);
+
 
 		pickupableLayerInt = LayerMask.NameToLayer("Pickupable");
 		if (pickupableLayerInt == -1) { Debug.LogError("Pickupable layer does not exist! Please create it.", this); }
@@ -68,7 +72,7 @@ public class PickupController : MonoBehaviour
 			inputHandler.OnCookActionStarted -= HandleCookActionStarted;
 			inputHandler.OnCookActionCanceled -= HandleCookActionCanceled;
 		}
-		if (currentlyHeldItem != null) DropItem(false); // Pass false as we don't want sound on disable
+		if (currentlyHeldItem != null) DropItem(false);
 
 		if (activeCookingStation != null)
 		{
@@ -85,49 +89,97 @@ public class PickupController : MonoBehaviour
 		}
 	}
 
-	private void HandleInteraction()
+	private void HandleInteraction() // 'E' key
 	{
-		if (currentlyHeldItem != null)
+		RaycastHit hit;
+
+		// --- TEMPORARY DEBUG ---
+		// Raycast against ALL layers to see what we hit first
+		if (Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance)) // No layer mask here for debug
 		{
-			DropItem(true); // Play sound on manual drop
+			Debug.Log($"DEBUG: Raycast hit object: {hit.collider.gameObject.name} on layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)} with tag: {hit.collider.gameObject.tag}");
 		}
 		else
 		{
-			if (!TrySpawnFromSource())
+			Debug.Log("DEBUG: Raycast hit nothing.");
+		}
+		// --- END TEMPORARY DEBUG ---
+
+
+		// 1. Check for Cat Interaction
+		// The 'catInteractableLayerMask' is crucial here
+		if (Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance, catInteractableLayerMask))
+		{
+			Debug.Log($"Trying cat interaction. Ray hit: {hit.collider.name} on layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}"); // Added debug
+			CatAI cat = hit.collider.GetComponent<CatAI>();
+			if (cat != null)
 			{
-				TryPickupExistingItem();
+				Debug.Log("Interacting with cat!");
+				cat.TriggerSitUpAndSound();
+				return; // Cat interaction handled
 			}
+			else
+			{
+				Debug.Log("Hit object on CatLayer, but no CatAI script found on it."); // Added debug
+			}
+		}
+		else
+		{
+			Debug.Log("Raycast for CatLayer didn't hit anything."); // Added debug
+		}
+
+
+		// 2. Check for General Interactables (like Radio)
+		if (Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance, generalInteractableLayerMask))
+		{
+			RadioInteractable radio = hit.collider.GetComponent<RadioInteractable>();
+			if (radio != null)
+			{
+				radio.Interact();
+				return; // Radio interaction handled
+			}
+		}
+
+		// 3. If not cat or radio, proceed with existing pickup/drop/spawn logic
+		if (currentlyHeldItem != null)
+		{
+			DropItem(true);
+		}
+		else
+		{
+			if (TrySpawnFromSource())
+			{
+				return;
+			}
+			TryPickupExistingItem();
 		}
 	}
 
-	private void HandleCookActionStarted()
+	private void HandleCookActionStarted() // 'Q' key press
 	{
-		if (currentlyHeldItem != null) { return; } // Can't cook if holding something
-
-		activeCookingStation = null; // Reset just in case
-
+		if (currentlyHeldItem != null) { return; }
+		activeCookingStation = null;
 		RaycastHit hit;
 		if (Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance, cookingStationLayerMask))
 		{
 			ApplianceStation appliance = hit.collider.GetComponent<ApplianceStation>();
 			if (appliance != null)
 			{
-				appliance.StartAutoCooking(); // This is a press-once action
+				appliance.StartAutoCooking();
 				return;
 			}
-
 			CookingStation station = hit.collider.GetComponent<CookingStation>();
 			if (station != null)
 			{
-				if (station.StartHoldToCook()) // Returns true if hold started
+				if (station.StartHoldToCook())
 				{
-					activeCookingStation = station; // Track it for cancellation on Q release
+					activeCookingStation = station;
 				}
 			}
 		}
 	}
 
-	private void HandleCookActionCanceled()
+	private void HandleCookActionCanceled() // 'Q' key release
 	{
 		if (activeCookingStation != null)
 		{
@@ -172,7 +224,6 @@ public class PickupController : MonoBehaviour
 		heldItemRigidbody.isKinematic = true;
 		if (playerCollider != null) { Physics.IgnoreCollision(playerCollider, newItemCollider, true); }
 
-		// Play pickup sound
 		if (audioSource != null && pickupSound != null)
 		{
 			audioSource.PlayOneShot(pickupSound);
@@ -185,7 +236,7 @@ public class PickupController : MonoBehaviour
 		if (Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance, pickupLayerMask))
 		{
 			Pickupable itemToPickup = hit.collider.GetComponent<Pickupable>();
-			if (itemToPickup != null && itemToPickup.Rb != null && !itemToPickup.Rb.isKinematic) // Ensure it's not already held or static
+			if (itemToPickup != null && itemToPickup.Rb != null && !itemToPickup.Rb.isKinematic)
 			{
 				GrabExistingItem(itemToPickup, hit.collider);
 			}
@@ -203,10 +254,8 @@ public class PickupController : MonoBehaviour
 			originalGravityState = heldItemRigidbody.useGravity;
 			heldItemRigidbody.useGravity = false;
 			heldItemRigidbody.isKinematic = true;
-			currentlyHeldItem.gameObject.layer = pickupableLayerInt; // Ensure it's on the correct layer if we change it
 			if (playerCollider != null && itemCollider != null) { Physics.IgnoreCollision(playerCollider, itemCollider, true); }
 
-			// Play pickup sound
 			if (audioSource != null && pickupSound != null)
 			{
 				audioSource.PlayOneShot(pickupSound);
@@ -227,7 +276,6 @@ public class PickupController : MonoBehaviour
 		heldItemRigidbody.useGravity = originalGravityState;
 
 		if (playerCollider != null && itemCollider != null) { Physics.IgnoreCollision(playerCollider, itemCollider, false); }
-		// We don't change layer back here, assuming it stays Pickupable or gets handled by station
 
 		if (playSound && audioSource != null && dropSound != null)
 		{
