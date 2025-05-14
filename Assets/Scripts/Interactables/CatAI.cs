@@ -6,10 +6,9 @@ public class CatAI : MonoBehaviour
 	[Header("Animation Settings")]
 	private Animator animator;
 	private static readonly int IsWalkingHash = Animator.StringToHash("IsWalking");
+	private static readonly int IsSittingHash = Animator.StringToHash("IsSitting"); // For controlling sitting state
 	private static readonly int PlayMiauHash = Animator.StringToHash("PlayMiau");
 	private static readonly int PlaySitUpHash = Animator.StringToHash("PlaySitUp");
-	// Add IsSittingHash if you implement a separate standing up logic
-	// private static readonly int IsSittingHash = Animator.StringToHash("IsSitting");
 
 
 	[Header("Sound Settings")]
@@ -17,15 +16,17 @@ public class CatAI : MonoBehaviour
 	private AudioSource audioSource;
 
 	[Header("Wandering Settings (On Table)")]
-	[SerializeField] private Collider tableCollider; // Assign the table's collider
+	[SerializeField] private Collider tableCollider;
 	[SerializeField] private float walkSpeed = 0.5f;
-	[SerializeField] private float minWanderWaitTime = 2f;
-	[SerializeField] private float maxWanderWaitTime = 7f;
-	[SerializeField] private float rotationSpeed = 120f; // Degrees per second
-	private Coroutine wanderCoroutine;
-	private bool isWandering = false;
+	[SerializeField] private float minWanderWaitTime = 3f;
+	[SerializeField] private float maxWanderWaitTime = 8f;
+	[SerializeField] private float rotationSpeed = 120f;
+	[SerializeField] private float sitDuration = 5f; // How long the cat will sit before wandering again
 
-	public static CatAI Instance { get; private set; } // Simple Singleton
+	private Coroutine currentActionCoroutine; // To manage both wandering and sitting delays
+	private bool isCurrentlySitting = false; // Script's internal state tracking
+
+	public static CatAI Instance { get; private set; }
 
 	void Awake()
 	{
@@ -41,15 +42,18 @@ public class CatAI : MonoBehaviour
 
 		if (animator == null) Debug.LogError("CatAI: Animator component not found!");
 		if (audioSource == null) Debug.LogError("CatAI: AudioSource component not found! Please add one.");
-		if (tableCollider == null) Debug.LogWarning("CatAI: Table Collider not assigned. Cat will not wander.");
+		if (tableCollider == null) Debug.LogWarning("CatAI: Table Collider not assigned. Cat will not wander initially.");
 	}
 
 	void Start()
 	{
 		if (tableCollider != null)
 		{
-			// Start wandering if a table is assigned
-			wanderCoroutine = StartCoroutine(WanderOnTableRoutine());
+			// Start wandering if a table is assigned and not already sitting
+			if (!isCurrentlySitting)
+			{
+				StartWandering();
+			}
 		}
 	}
 
@@ -67,89 +71,169 @@ public class CatAI : MonoBehaviour
 
 	public void TriggerSitUpAndSound()
 	{
-		if (isWandering && wanderCoroutine != null) // Stop wandering if told to sit
+		if (isCurrentlySitting) // If already sitting, maybe stand up and wander? Or do nothing.
 		{
-			StopCoroutine(wanderCoroutine);
-			isWandering = false;
-			if (animator != null) animator.SetBool(IsWalkingHash, false);
+			Debug.Log("Cat is already sitting. Making it stand and wander.");
+			StandUpAndWander();
+			return;
 		}
 
+		StopCurrentAction(); // Stop wandering or any other timed action
+
+		isCurrentlySitting = true;
 		if (animator != null)
 		{
-			animator.SetTrigger(PlaySitUpHash);
-			// If you want it to stay sitting, you might set a bool:
-			// animator.SetBool(IsSittingHash, true);
-			// animator.SetBool(IsWalkingHash, false);
-			Debug.Log("Cat: PlaySitUp trigger set.");
+			animator.SetBool(IsWalkingHash, false); // Ensure not trying to walk
+			animator.SetTrigger(PlaySitUpHash);     // Play the "sit down" animation
+			animator.SetBool(IsSittingHash, true);  // Tell animator to enter/stay in sitting loop
+			Debug.Log("Cat: PlaySitUp trigger set, IsSitting set to true.");
 		}
 		PlayMeowSound();
+
+		// Start coroutine to stand up and wander after a delay
+		currentActionCoroutine = StartCoroutine(ResumeWanderingAfterSitDelay());
 	}
 
+	private void StandUpAndWander()
+	{
+		StopCurrentAction(); // Stop the sit delay if it was active
+
+		isCurrentlySitting = false;
+		if (animator != null)
+		{
+			animator.SetBool(IsSittingHash, false); // Tell animator to transition out of sitting
+			Debug.Log("Cat: IsSitting set to false (to stand up).");
+		}
+		PlayMeowSound(); // Optional: meow when standing from interaction
+
+		// Give a very short delay for stand-up animation to start/play
+		// before immediately trying to walk.
+		currentActionCoroutine = StartCoroutine(DelayedStartWandering(0.5f));
+	}
+
+
+	private IEnumerator ResumeWanderingAfterSitDelay()
+	{
+		yield return new WaitForSeconds(sitDuration);
+
+		if (isCurrentlySitting) // Only proceed if still meant to be sitting
+		{
+			Debug.Log("Cat: Sit duration over. Standing up to wander.");
+			isCurrentlySitting = false;
+			if (animator != null)
+			{
+				animator.SetBool(IsSittingHash, false); // Trigger stand up
+			}
+			// Wait a brief moment for stand-up animation to potentially start
+			yield return new WaitForSeconds(0.5f); // Adjust if you have a long stand-up animation
+			StartWandering();
+		}
+	}
+
+	private IEnumerator DelayedStartWandering(float delay)
+	{
+		yield return new WaitForSeconds(delay);
+		StartWandering();
+	}
+
+
 	// --- Wandering Logic ---
+	private void StartWandering()
+	{
+		if (tableCollider == null)
+		{
+			Debug.Log("Cat: Cannot wander, tableCollider not set.");
+			return;
+		}
+		StopCurrentAction(); // Make sure no other action coroutine is running
+
+		isCurrentlySitting = false; // Ensure not marked as sitting
+		if (animator != null)
+		{
+			animator.SetBool(IsSittingHash, false); // Make sure it's not stuck in sitting animation
+		}
+		currentActionCoroutine = StartCoroutine(WanderOnTableRoutine());
+	}
+
+	private void StopCurrentAction()
+	{
+		if (currentActionCoroutine != null)
+		{
+			StopCoroutine(currentActionCoroutine);
+			currentActionCoroutine = null;
+		}
+		// Reset animation states that might be stuck if action was interrupted
+		if (animator != null)
+		{
+			animator.SetBool(IsWalkingHash, false);
+		}
+	}
+
+
 	private IEnumerator WanderOnTableRoutine()
 	{
-		isWandering = true;
-		while (isWandering && tableCollider != null)
+		Debug.Log("Cat: Starting WanderOnTableRoutine.");
+		while (true) // Loop indefinitely until explicitly stopped
 		{
-			// 1. Wait for a random duration
+			// 1. Ensure not sitting and set to idle animation
+			if (animator != null)
+			{
+				animator.SetBool(IsWalkingHash, false);
+				animator.SetBool(IsSittingHash, false); // Double ensure
+			}
+
+			// 2. Wait for a random duration
 			float waitTime = Random.Range(minWanderWaitTime, maxWanderWaitTime);
+			Debug.Log($"Cat: Wandering - waiting for {waitTime} seconds.");
 			yield return new WaitForSeconds(waitTime);
 
-			if (!isWandering) yield break; // Stop if commanded to do something else
-
-			// 2. Pick a random point on the table
+			// 3. Pick a random point on the table
 			Vector3 randomPointOnTable = GetRandomPointOnTable();
+			Debug.Log($"Cat: Wandering - new target point: {randomPointOnTable}");
 
-			// 3. Rotate towards the point
-			Quaternion targetRotation = Quaternion.LookRotation(randomPointOnTable - transform.position);
-			targetRotation.x = 0; // Keep cat upright
-			targetRotation.z = 0;
-
-			float angleToTarget = Quaternion.Angle(transform.rotation, targetRotation);
-			float rotateDuration = angleToTarget / rotationSpeed;
-
-			if (animator != null) animator.SetBool(IsWalkingHash, false); // Idle while turning
-
-			float t = 0;
-			Quaternion initialRotation = transform.rotation;
-			while (t < rotateDuration)
+			// 4. Rotate towards the point
+			if (Vector3.Distance(transform.position, randomPointOnTable) > 0.01f) // Only rotate if not already there
 			{
-				transform.rotation = Quaternion.Slerp(initialRotation, targetRotation, t / rotateDuration);
-				t += Time.deltaTime;
-				yield return null;
-			}
-			transform.rotation = targetRotation; // Ensure exact rotation
+				Quaternion targetRotation = Quaternion.LookRotation(randomPointOnTable - transform.position);
+				targetRotation.x = 0;
+				targetRotation.z = 0;
 
-			if (!isWandering) yield break;
-
-			// 4. Walk to the point
-			if (animator != null) animator.SetBool(IsWalkingHash, true);
-			float distanceToTarget = Vector3.Distance(transform.position, randomPointOnTable);
-			float walkDuration = distanceToTarget / walkSpeed;
-
-			t = 0;
-			Vector3 initialPosition = transform.position;
-			while (t < walkDuration)
-			{
-				transform.position = Vector3.MoveTowards(transform.position, randomPointOnTable, walkSpeed * Time.deltaTime);
-				// Make sure cat stays on table Y level if it drifts
-				Vector3 currentPos = transform.position;
-				currentPos.y = tableCollider.bounds.max.y + (transform.localScale.y * 0.5f); // Assuming cat pivot is at its base
-																							 // Or more simply, if the cat is parented to the table, its local Y can be kept constant.
-																							 // transform.position = currentPos;
-
-				t += Time.deltaTime;
-				yield return null;
-				if (!isWandering) // Check if we should stop mid-walk
+				float angleToTarget = Quaternion.Angle(transform.rotation, targetRotation);
+				if (angleToTarget > 1f) // Only rotate if significant angle
 				{
-					if (animator != null) animator.SetBool(IsWalkingHash, false);
-					yield break;
+					Debug.Log("Cat: Wandering - Rotating.");
+					float rotateDuration = angleToTarget / rotationSpeed;
+					float t = 0;
+					Quaternion initialRotation = transform.rotation;
+					while (t < rotateDuration)
+					{
+						transform.rotation = Quaternion.Slerp(initialRotation, targetRotation, t / rotateDuration);
+						t += Time.deltaTime;
+						yield return null;
+					}
+					transform.rotation = targetRotation;
 				}
 			}
-			transform.position = randomPointOnTable; // Ensure exact position
+
+
+			// 5. Walk to the point
+			if (animator != null) animator.SetBool(IsWalkingHash, true);
+			Debug.Log("Cat: Wandering - Walking.");
+			Vector3 initialPosition = transform.position;
+			float distanceToTarget = Vector3.Distance(initialPosition, randomPointOnTable);
+			float walkDuration = distanceToTarget / walkSpeed;
+			float tWalk = 0;
+
+			while (tWalk < walkDuration)
+			{
+				transform.position = Vector3.MoveTowards(transform.position, randomPointOnTable, walkSpeed * Time.deltaTime);
+				tWalk += Time.deltaTime;
+				yield return null;
+			}
+			transform.position = randomPointOnTable;
 			if (animator != null) animator.SetBool(IsWalkingHash, false);
+			Debug.Log("Cat: Wandering - Reached target.");
 		}
-		isWandering = false;
 	}
 
 	private Vector3 GetRandomPointOnTable()
@@ -157,42 +241,16 @@ public class CatAI : MonoBehaviour
 		Bounds tableBounds = tableCollider.bounds;
 		float randomX = Random.Range(tableBounds.min.x, tableBounds.max.x);
 		float randomZ = Random.Range(tableBounds.min.z, tableBounds.max.z);
-
-		// Assuming the cat should be on top of the table.
-		// The Y position should be the top of the table + half the cat's height (if pivot is at base)
-		// For simplicity, if the cat is a child of the table, you can work in local coordinates.
-		// Here, we assume world coordinates and the cat is not necessarily a child.
-		float yPos = tableBounds.max.y; // This might need adjustment based on cat's pivot point
-
+		float yPos = tableBounds.max.y; // Adjust if cat's pivot isn't at its base
 		return new Vector3(randomX, yPos, randomZ);
 	}
 
-
-	// --- Sound ---
 	private void PlayMeowSound()
 	{
 		if (audioSource != null && meowSound != null)
 		{
 			audioSource.PlayOneShot(meowSound);
 		}
-		else if (meowSound == null)
-		{
-			Debug.LogWarning("CatAI: Meow sound clip not assigned.");
-		}
-	}
-
-	// Call this if you want to stop wandering externally (e.g. before sitting)
-	public void StopWandering()
-	{
-		if (isWandering && wanderCoroutine != null)
-		{
-			StopCoroutine(wanderCoroutine);
-			isWandering = false;
-			if (animator != null)
-			{
-				animator.SetBool(IsWalkingHash, false);
-			}
-			Debug.Log("Cat: Wandering stopped.");
-		}
+		else if (meowSound == null) Debug.LogWarning("CatAI: Meow sound clip not assigned.");
 	}
 }

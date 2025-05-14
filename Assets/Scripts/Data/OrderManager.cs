@@ -5,7 +5,7 @@ using TMPro;
 public class OrderManager : MonoBehaviour
 {
 	[Header("Order Settings")]
-	[SerializeField] private List<RecipeData> possibleOrders;
+	[SerializeField] private List<RecipeData> initialPossibleOrders; // Recipes available at the start
 	[SerializeField] private bool randomOrder = true;
 
 	[Header("UI")]
@@ -17,35 +17,34 @@ public class OrderManager : MonoBehaviour
 
 	[Header("State (Read Only)")]
 	[SerializeField] private RecipeData currentOrder;
-	private int currentOrderIndex = -1;
-	private bool allOrdersDone = false;
+	private int currentOrderIndex = -1; // Used for sequential non-random orders
+	private bool noMoreOrdersAvailable = false; // If all sequential are done or pool is empty
 
 	public static OrderManager Instance { get; private set; }
 	private AudioSource audioSource;
+	private List<RecipeData> activeOrderPool = new List<RecipeData>(); // Current pool of recipes being used
 
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
 		{
 			Destroy(gameObject);
+			return;
 		}
-		else
-		{
-			Instance = this;
-		}
-		audioSource = GetComponent<AudioSource>(); // Get the AudioSource
+		Instance = this;
+
+		audioSource = GetComponent<AudioSource>();
 		if (audioSource == null) { Debug.LogWarning("OrderManager requires an AudioSource component for sounds!", this); }
+
+		// Initialize active pool with starting recipes
+		if (initialPossibleOrders != null)
+		{
+			activeOrderPool.AddRange(initialPossibleOrders);
+		}
 	}
 
 	void Start()
 	{
-		if (possibleOrders == null || possibleOrders.Count == 0)
-		{
-			Debug.LogError("OrderManager: No possible orders assigned!");
-			if (currentOrderText != null) currentOrderText.text = "No Orders Available";
-			enabled = false;
-			return;
-		}
 		if (currentOrderText == null)
 		{
 			Debug.LogError("OrderManager: Current Order Text UI not assigned!");
@@ -55,45 +54,50 @@ public class OrderManager : MonoBehaviour
 
 	void GetNextOrder()
 	{
-		if (allOrdersDone) return; // Stop if all orders were completed and not looping
+		if (activeOrderPool.Count == 0)
+		{
+			noMoreOrdersAvailable = true;
+			currentOrder = null;
+			if (currentOrderText != null) currentOrderText.text = "No more orders for now!";
+			Debug.Log("OrderManager: No recipes in active pool to choose from.");
+			return;
+		}
 
-		if (possibleOrders.Count == 0) return;
+		noMoreOrdersAvailable = false;
 
 		if (randomOrder)
 		{
-			// Avoid picking the same order twice in a row if possible and there's more than one order
-			if (possibleOrders.Count > 1)
+			RecipeData previousOrder = currentOrder;
+			if (activeOrderPool.Count > 1 && previousOrder != null)
 			{
-				int newIndex = currentOrderIndex;
-				while (newIndex == currentOrderIndex)
-				{
-					newIndex = Random.Range(0, possibleOrders.Count);
-				}
-				currentOrderIndex = newIndex;
+				int attempts = 0;
+				do
+				{ // Try to avoid picking the same order twice in a row
+					currentOrder = activeOrderPool[Random.Range(0, activeOrderPool.Count)];
+					attempts++;
+				} while (currentOrder == previousOrder && attempts < activeOrderPool.Count * 2);
 			}
 			else
 			{
-				currentOrderIndex = 0; // Only one order, so pick that one
+				currentOrder = activeOrderPool[Random.Range(0, activeOrderPool.Count)];
 			}
 		}
-		else // Sequential
+		else // Sequential (from the current active pool)
 		{
 			currentOrderIndex++;
-			if (currentOrderIndex >= possibleOrders.Count)
+			if (currentOrderIndex >= activeOrderPool.Count)
 			{
-				Debug.Log("All sequential orders completed!");
-				if (currentOrderText != null) currentOrderText.text = "All Orders Done!";
-				currentOrder = null;
-				allOrdersDone = true;
-				// Optional: Play a special "all orders complete" sound here
-				return;
+				// This means all orders in the current pool have been done sequentially.
+				// Depending on design, you might loop, or stop, or wait for unlocks.
+				// For now, let's just log and potentially stop if no new recipes are unlocked.
+				Debug.Log("OrderManager: Reached end of sequential list. Looping or waiting for unlocks.");
+				currentOrderIndex = 0; // Simple loop for now
 			}
+			currentOrder = activeOrderPool[currentOrderIndex];
 		}
 
-		currentOrder = possibleOrders[currentOrderIndex];
 		UpdateOrderUI();
 
-		// Play new order sound
 		if (audioSource != null && newOrderSound != null && currentOrder != null)
 		{
 			audioSource.PlayOneShot(newOrderSound);
@@ -102,17 +106,20 @@ public class OrderManager : MonoBehaviour
 
 	void UpdateOrderUI()
 	{
-		if (currentOrderText != null && currentOrder != null)
+		if (currentOrderText != null)
 		{
-			currentOrderText.text = $"Order: {currentOrder.recipeName}";
-		}
-		else if (currentOrderText != null && allOrdersDone)
-		{
-			currentOrderText.text = "All Orders Done!";
-		}
-		else if (currentOrderText != null)
-		{
-			currentOrderText.text = ""; // Clear if no current order for other reasons
+			if (currentOrder != null)
+			{
+				currentOrderText.text = $"{currentOrder.recipeName}";
+			}
+			else if (noMoreOrdersAvailable)
+			{
+				currentOrderText.text = "Waiting for new recipes...";
+			}
+			else
+			{
+				currentOrderText.text = ""; // Should not happen if GetNextOrder is robust
+			}
 		}
 	}
 
@@ -122,31 +129,50 @@ public class OrderManager : MonoBehaviour
 		{
 			return false;
 		}
-
 		if (!string.IsNullOrEmpty(currentOrder.resultDishTag) && submittedDish.CompareTag(currentOrder.resultDishTag))
 		{
-			Debug.Log($"Correct dish submitted: {currentOrder.recipeName}");
 			return true;
 		}
-		else
-		{
-			Debug.Log($"Incorrect dish submitted. Expected tag: '{currentOrder.resultDishTag}', Submitted object tag: '{submittedDish.tag}'");
-			return false;
-		}
+		return false;
 	}
 
 	public void OrderCompleted()
 	{
-		if (currentOrder == null) return; // Should not happen if CheckOrderCompletion was true
+		if (currentOrder == null) return;
 
 		Debug.Log($"Order '{currentOrder.recipeName}' Completed!");
 
-		// Play order complete sound
 		if (audioSource != null && orderCompleteSound != null)
 		{
 			audioSource.PlayOneShot(orderCompleteSound);
 		}
 
+		// --- Notify RewardManager ---
+		if (RewardManager.Instance != null)
+		{
+			RewardManager.Instance.IncrementDishesCompleted();
+		}
+		// --------------------------
+
+		if (CatAI.Instance != null)
+		{
+			CatAI.Instance.TriggerMiauAndSound();
+		}
+
 		GetNextOrder();
+	}
+
+	// Called by RewardManager to add newly unlocked recipes
+	public void UnlockNewRecipe(RecipeData newRecipe)
+	{
+		if (newRecipe != null && !activeOrderPool.Contains(newRecipe))
+		{
+			activeOrderPool.Add(newRecipe);
+			Debug.Log($"OrderManager: New recipe '{newRecipe.recipeName}' added to available orders.");
+			if (noMoreOrdersAvailable || currentOrder == null) // If we were out of orders, try to get a new one
+			{
+				GetNextOrder();
+			}
+		}
 	}
 }
