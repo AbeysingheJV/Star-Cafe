@@ -123,6 +123,37 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &11998364
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 11998365}
+  m_Layer: 12
+  m_Name: HeartSpawner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &11998365
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 11998364}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.1572, z: 0.067}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1954998630}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &20186464
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2455,6 +2486,11 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 25981ca2409595842a4e5ff29055fe5e, type: 2}
   resultSpawnPoint: {fileID: 1480311226}
   progressBar: {fileID: 0}
+  cookingProcessVFXPrefab: {fileID: 0}
+  cookingProcessVFXSpawnPoint: {fileID: 0}
+  underPanFireVFXPrefab: {fileID: 5326925910918702761, guid: 665c8add0bf4b4b4eab7e7f2a0c9ffeb,
+    type: 3}
+  fireSpawnPoint: {fileID: 308143984}
   processStartSound: {fileID: 0}
   processingLoopSound: {fileID: 8300000, guid: 55c1e6770f232214b94448e81b405acb, type: 3}
   processCompleteSound: {fileID: 0}
@@ -3504,7 +3540,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: ee7de2c6bb1ca1e48945088c5fb719bd, type: 2}
   resultSpawnPoint: {fileID: 1463836377}
   progressBar: {fileID: 0}
-  cookingEffectPrefab: {fileID: 0}
+  stationProcessingVFXPrefab: {fileID: 0}
+  playerHoldActionVFXPrefab: {fileID: 4109064841345302815, guid: 0216eac379860254faf91386a9a969f9,
+    type: 3}
   processStartSound: {fileID: 0}
   processingLoopSound: {fileID: 8300000, guid: 7b98cc7f3c9172f43b3a719aaa6cba8d, type: 3}
   processCompleteSound: {fileID: 0}
@@ -3723,6 +3761,37 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ingredientPrefab: {fileID: 4233294293685470788, guid: 5b8334e592488e14ab3c9be4b0a1180a,
     type: 3}
+--- !u!1 &308143983
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 308143984}
+  m_Layer: 10
+  m_Name: FireSpawnPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &308143984
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 308143983}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.12, y: -0.33, z: -0.34}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1740162395}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &309312086
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8836,7 +8905,7 @@ Transform:
   m_GameObject: {fileID: 720397295}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: 0}
+  m_LocalPosition: {x: 0, y: 1.02, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -12515,7 +12584,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: ee7de2c6bb1ca1e48945088c5fb719bd, type: 2}
   resultSpawnPoint: {fileID: 720397296}
   progressBar: {fileID: 0}
-  cookingEffectPrefab: {fileID: 0}
+  stationProcessingVFXPrefab: {fileID: 0}
+  playerHoldActionVFXPrefab: {fileID: 4109064841345302815, guid: 0216eac379860254faf91386a9a969f9,
+    type: 3}
   processStartSound: {fileID: 0}
   processingLoopSound: {fileID: 8300000, guid: 7b98cc7f3c9172f43b3a719aaa6cba8d, type: 3}
   processCompleteSound: {fileID: 0}
@@ -12922,7 +12993,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 8d73cb95406a9354a92086d815807014, type: 2}
   resultSpawnPoint: {fileID: 754920874}
   progressBar: {fileID: 0}
-  cookingEffectPrefab: {fileID: 0}
+  stationProcessingVFXPrefab: {fileID: 0}
+  playerHoldActionVFXPrefab: {fileID: 0}
   processStartSound: {fileID: 0}
   processingLoopSound: {fileID: 0}
   processCompleteSound: {fileID: 0}
@@ -19273,7 +19345,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: ee7de2c6bb1ca1e48945088c5fb719bd, type: 2}
   resultSpawnPoint: {fileID: 1199438754}
   progressBar: {fileID: 0}
-  cookingEffectPrefab: {fileID: 0}
+  stationProcessingVFXPrefab: {fileID: 0}
+  playerHoldActionVFXPrefab: {fileID: 4109064841345302815, guid: 0216eac379860254faf91386a9a969f9,
+    type: 3}
   processStartSound: {fileID: 0}
   processingLoopSound: {fileID: 8300000, guid: 43c9abc10701ba64696dff085bff6fb2, type: 3}
   processCompleteSound: {fileID: 0}
@@ -21712,6 +21786,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 1480311226}
+    - targetCorrespondingSourceObject: {fileID: 1858366367718050681, guid: f1f250a1fe162334096c2653cdbdecc1,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 308143984}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 5443851239780794941, guid: f1f250a1fe162334096c2653cdbdecc1,
         type: 3}
@@ -25211,7 +25289,11 @@ PrefabInstance:
     m_RemovedComponents:
     - {fileID: 5619985934887145615, guid: b3e3682d46041fd4296d6088f21e0d98, type: 3}
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 2554720417436106229, guid: b3e3682d46041fd4296d6088f21e0d98,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 11998365}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 1526554761915109350, guid: b3e3682d46041fd4296d6088f21e0d98,
         type: 3}
@@ -25255,6 +25337,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   meowSound: {fileID: 8300000, guid: 8bdadef5ca805b248b1c7b8fbe7cc758, type: 3}
+  heartPetVFXPrefab: {fileID: 9127033242544037008, guid: f49dfc44c3bde6a40812bc1234cab02f,
+    type: 3}
+  heartSpawnPoint: {fileID: 11998365}
   tableCollider: {fileID: 1806459010}
   walkSpeed: 0.5
   minWanderWaitTime: 2

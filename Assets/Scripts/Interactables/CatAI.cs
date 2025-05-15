@@ -6,14 +6,17 @@ public class CatAI : MonoBehaviour
 	[Header("Animation Settings")]
 	private Animator animator;
 	private static readonly int IsWalkingHash = Animator.StringToHash("IsWalking");
-	private static readonly int IsSittingHash = Animator.StringToHash("IsSitting"); // For controlling sitting state
+	private static readonly int IsSittingHash = Animator.StringToHash("IsSitting");
 	private static readonly int PlayMiauHash = Animator.StringToHash("PlayMiau");
 	private static readonly int PlaySitUpHash = Animator.StringToHash("PlaySitUp");
-
 
 	[Header("Sound Settings")]
 	[SerializeField] private AudioClip meowSound;
 	private AudioSource audioSource;
+
+	[Header("VFX Settings")]
+	[SerializeField] private ParticleSystem heartPetVFXPrefab; // Assign your Heart VFX Prefab here
+	[SerializeField] private Transform heartSpawnPoint;      // Assign the empty child GameObject here
 
 	[Header("Wandering Settings (On Table)")]
 	[SerializeField] private Collider tableCollider;
@@ -21,10 +24,10 @@ public class CatAI : MonoBehaviour
 	[SerializeField] private float minWanderWaitTime = 3f;
 	[SerializeField] private float maxWanderWaitTime = 8f;
 	[SerializeField] private float rotationSpeed = 120f;
-	[SerializeField] private float sitDuration = 5f; // How long the cat will sit before wandering again
+	[SerializeField] private float sitDuration = 5f;
 
-	private Coroutine currentActionCoroutine; // To manage both wandering and sitting delays
-	private bool isCurrentlySitting = false; // Script's internal state tracking
+	private Coroutine currentActionCoroutine;
+	private bool isCurrentlySitting = false;
 
 	public static CatAI Instance { get; private set; }
 
@@ -43,13 +46,23 @@ public class CatAI : MonoBehaviour
 		if (animator == null) Debug.LogError("CatAI: Animator component not found!");
 		if (audioSource == null) Debug.LogError("CatAI: AudioSource component not found! Please add one.");
 		if (tableCollider == null) Debug.LogWarning("CatAI: Table Collider not assigned. Cat will not wander initially.");
+
+		// Setup default heart spawn point if not assigned
+		if (heartSpawnPoint == null)
+		{
+			Debug.LogWarning("CatAI: Heart Spawn Point not assigned. Defaulting to cat's own transform. Hearts may not appear as intended.");
+			heartSpawnPoint = transform; // Default to the cat's own position
+		}
+		if (heartPetVFXPrefab == null)
+		{
+			Debug.LogWarning("CatAI: Heart Pet VFX Prefab not assigned. Heart effect will not play.");
+		}
 	}
 
 	void Start()
 	{
 		if (tableCollider != null)
 		{
-			// Start wandering if a table is assigned and not already sitting
 			if (!isCurrentlySitting)
 			{
 				StartWandering();
@@ -57,75 +70,86 @@ public class CatAI : MonoBehaviour
 		}
 	}
 
-	// --- Public Methods to be called by other scripts ---
-
-	public void TriggerMiauAndSound()
+	public void TriggerMiauAndSound() // Called by OrderManager
 	{
 		if (animator != null)
 		{
 			animator.SetTrigger(PlayMiauHash);
-			Debug.Log("Cat: PlayMiau trigger set.");
 		}
 		PlayMeowSound();
+		// Optionally, play hearts here too if you want the cat to show hearts for completed orders
+		// PlayHeartVFX();
 	}
 
-	public void TriggerSitUpAndSound()
+	public void TriggerSitUpAndSound() // Called by PickupController when player interacts (pets)
 	{
-		if (isCurrentlySitting) // If already sitting, maybe stand up and wander? Or do nothing.
+		if (isCurrentlySitting)
 		{
-			Debug.Log("Cat is already sitting. Making it stand and wander.");
-			StandUpAndWander();
+			StandUpAndWander(); // If already sitting, stand up
+			PlayHeartVFX();     // Still play hearts because player interacted
 			return;
 		}
 
-		StopCurrentAction(); // Stop wandering or any other timed action
+		StopCurrentAction();
 
 		isCurrentlySitting = true;
 		if (animator != null)
 		{
-			animator.SetBool(IsWalkingHash, false); // Ensure not trying to walk
-			animator.SetTrigger(PlaySitUpHash);     // Play the "sit down" animation
-			animator.SetBool(IsSittingHash, true);  // Tell animator to enter/stay in sitting loop
-			Debug.Log("Cat: PlaySitUp trigger set, IsSitting set to true.");
+			animator.SetBool(IsWalkingHash, false);
+			animator.SetTrigger(PlaySitUpHash);
+			animator.SetBool(IsSittingHash, true);
 		}
 		PlayMeowSound();
+		PlayHeartVFX(); // --- Play Heart VFX on Pet ---
 
-		// Start coroutine to stand up and wander after a delay
 		currentActionCoroutine = StartCoroutine(ResumeWanderingAfterSitDelay());
+	}
+
+	private void PlayHeartVFX()
+	{
+		if (heartPetVFXPrefab != null && heartSpawnPoint != null)
+		{
+			// Instantiate the VFX at the heartSpawnPoint's position and rotation
+			ParticleSystem heartsInstance = Instantiate(heartPetVFXPrefab, heartSpawnPoint.position, heartSpawnPoint.rotation);
+			heartsInstance.Play(); // Should play automatically if PlayOnAwake is false and it's a burst
+
+			// If the particle system doesn't destroy itself (e.g., Stop Action is not Destroy),
+			// destroy it after its estimated duration.
+			// Get the maximum lifetime of particles in the system to estimate when to destroy.
+			float maxLifetime = heartsInstance.main.duration + heartsInstance.main.startLifetime.constantMax;
+			Destroy(heartsInstance.gameObject, maxLifetime + 0.5f); // Add a small buffer
+			Debug.Log("CatAI: Played Heart VFX.");
+		}
+		else
+		{
+			if (heartPetVFXPrefab == null) Debug.LogWarning("CatAI: HeartPetVFXPrefab is not assigned.");
+			if (heartSpawnPoint == null) Debug.LogWarning("CatAI: HeartSpawnPoint is not assigned.");
+		}
 	}
 
 	private void StandUpAndWander()
 	{
-		StopCurrentAction(); // Stop the sit delay if it was active
-
+		StopCurrentAction();
 		isCurrentlySitting = false;
 		if (animator != null)
 		{
-			animator.SetBool(IsSittingHash, false); // Tell animator to transition out of sitting
-			Debug.Log("Cat: IsSitting set to false (to stand up).");
+			animator.SetBool(IsSittingHash, false);
 		}
-		PlayMeowSound(); // Optional: meow when standing from interaction
-
-		// Give a very short delay for stand-up animation to start/play
-		// before immediately trying to walk.
+		// PlayMeowSound(); // Meow sound is already played by TriggerSitUpAndSound if called from there
 		currentActionCoroutine = StartCoroutine(DelayedStartWandering(0.5f));
 	}
-
 
 	private IEnumerator ResumeWanderingAfterSitDelay()
 	{
 		yield return new WaitForSeconds(sitDuration);
-
-		if (isCurrentlySitting) // Only proceed if still meant to be sitting
+		if (isCurrentlySitting)
 		{
-			Debug.Log("Cat: Sit duration over. Standing up to wander.");
 			isCurrentlySitting = false;
 			if (animator != null)
 			{
-				animator.SetBool(IsSittingHash, false); // Trigger stand up
+				animator.SetBool(IsSittingHash, false);
 			}
-			// Wait a brief moment for stand-up animation to potentially start
-			yield return new WaitForSeconds(0.5f); // Adjust if you have a long stand-up animation
+			yield return new WaitForSeconds(0.5f);
 			StartWandering();
 		}
 	}
@@ -136,21 +160,14 @@ public class CatAI : MonoBehaviour
 		StartWandering();
 	}
 
-
-	// --- Wandering Logic ---
 	private void StartWandering()
 	{
-		if (tableCollider == null)
-		{
-			Debug.Log("Cat: Cannot wander, tableCollider not set.");
-			return;
-		}
-		StopCurrentAction(); // Make sure no other action coroutine is running
-
-		isCurrentlySitting = false; // Ensure not marked as sitting
+		if (tableCollider == null) return;
+		StopCurrentAction();
+		isCurrentlySitting = false;
 		if (animator != null)
 		{
-			animator.SetBool(IsSittingHash, false); // Make sure it's not stuck in sitting animation
+			animator.SetBool(IsSittingHash, false);
 		}
 		currentActionCoroutine = StartCoroutine(WanderOnTableRoutine());
 	}
@@ -162,77 +179,53 @@ public class CatAI : MonoBehaviour
 			StopCoroutine(currentActionCoroutine);
 			currentActionCoroutine = null;
 		}
-		// Reset animation states that might be stuck if action was interrupted
 		if (animator != null)
 		{
 			animator.SetBool(IsWalkingHash, false);
 		}
 	}
 
-
 	private IEnumerator WanderOnTableRoutine()
 	{
-		Debug.Log("Cat: Starting WanderOnTableRoutine.");
-		while (true) // Loop indefinitely until explicitly stopped
+		while (true)
 		{
-			// 1. Ensure not sitting and set to idle animation
 			if (animator != null)
 			{
 				animator.SetBool(IsWalkingHash, false);
-				animator.SetBool(IsSittingHash, false); // Double ensure
+				animator.SetBool(IsSittingHash, false);
 			}
-
-			// 2. Wait for a random duration
 			float waitTime = Random.Range(minWanderWaitTime, maxWanderWaitTime);
-			Debug.Log($"Cat: Wandering - waiting for {waitTime} seconds.");
 			yield return new WaitForSeconds(waitTime);
-
-			// 3. Pick a random point on the table
 			Vector3 randomPointOnTable = GetRandomPointOnTable();
-			Debug.Log($"Cat: Wandering - new target point: {randomPointOnTable}");
-
-			// 4. Rotate towards the point
-			if (Vector3.Distance(transform.position, randomPointOnTable) > 0.01f) // Only rotate if not already there
+			if (Vector3.Distance(transform.position, randomPointOnTable) > 0.01f)
 			{
 				Quaternion targetRotation = Quaternion.LookRotation(randomPointOnTable - transform.position);
-				targetRotation.x = 0;
-				targetRotation.z = 0;
-
-				float angleToTarget = Quaternion.Angle(transform.rotation, targetRotation);
-				if (angleToTarget > 1f) // Only rotate if significant angle
+				targetRotation.x = 0; targetRotation.z = 0;
+				if (Quaternion.Angle(transform.rotation, targetRotation) > 1f)
 				{
-					Debug.Log("Cat: Wandering - Rotating.");
-					float rotateDuration = angleToTarget / rotationSpeed;
-					float t = 0;
-					Quaternion initialRotation = transform.rotation;
+					float rotateDuration = Quaternion.Angle(transform.rotation, targetRotation) / rotationSpeed;
+					float t = 0; Quaternion initialRotation = transform.rotation;
 					while (t < rotateDuration)
 					{
 						transform.rotation = Quaternion.Slerp(initialRotation, targetRotation, t / rotateDuration);
-						t += Time.deltaTime;
-						yield return null;
+						t += Time.deltaTime; yield return null;
 					}
 					transform.rotation = targetRotation;
 				}
 			}
-
-
-			// 5. Walk to the point
 			if (animator != null) animator.SetBool(IsWalkingHash, true);
-			Debug.Log("Cat: Wandering - Walking.");
 			Vector3 initialPosition = transform.position;
 			float distanceToTarget = Vector3.Distance(initialPosition, randomPointOnTable);
+			if (walkSpeed <= 0) walkSpeed = 0.1f; // Prevent division by zero if speed is not set
 			float walkDuration = distanceToTarget / walkSpeed;
 			float tWalk = 0;
-
 			while (tWalk < walkDuration)
 			{
 				transform.position = Vector3.MoveTowards(transform.position, randomPointOnTable, walkSpeed * Time.deltaTime);
-				tWalk += Time.deltaTime;
-				yield return null;
+				tWalk += Time.deltaTime; yield return null;
 			}
 			transform.position = randomPointOnTable;
 			if (animator != null) animator.SetBool(IsWalkingHash, false);
-			Debug.Log("Cat: Wandering - Reached target.");
 		}
 	}
 
@@ -241,7 +234,7 @@ public class CatAI : MonoBehaviour
 		Bounds tableBounds = tableCollider.bounds;
 		float randomX = Random.Range(tableBounds.min.x, tableBounds.max.x);
 		float randomZ = Random.Range(tableBounds.min.z, tableBounds.max.z);
-		float yPos = tableBounds.max.y; // Adjust if cat's pivot isn't at its base
+		float yPos = tableBounds.max.y;
 		return new Vector3(randomX, yPos, randomZ);
 	}
 

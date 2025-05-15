@@ -8,43 +8,48 @@ public class CookingStation : MonoBehaviour
 {
 	[Header("Setup")]
 	[SerializeField] private List<RecipeData> availableRecipes;
-	[SerializeField] private Transform resultSpawnPoint;
+	[SerializeField] private Transform resultSpawnPoint; // Also good for VFX spawn point
 	[SerializeField] private Slider progressBar;
-	[SerializeField] private ParticleSystem cookingEffectPrefab;
+
+	[Header("VFX")]
+	[SerializeField] private ParticleSystem stationProcessingVFXPrefab; // For continuous effect during timer (optional)
+	[SerializeField] private ParticleSystem playerHoldActionVFXPrefab; // Assign your starburst VFX here
 
 	[Header("Audio")]
-	[SerializeField] private AudioClip processStartSound; // e.g., initial knife on board
-	[SerializeField] private AudioClip processingLoopSound; // e.g., continuous chopping
-	[SerializeField] private AudioClip processCompleteSound; // e.g., final chop, item ready
+	[SerializeField] private AudioClip processStartSound;
+	[SerializeField] private AudioClip processingLoopSound;
+	[SerializeField] private AudioClip processCompleteSound;
 
 	[Header("State (Read Only)")]
 	[SerializeField] private List<Pickupable> ingredientsOnStation = new List<Pickupable>();
 
-	private bool isProcessing = false; // Renamed from isCooking for clarity
-	private float currentProcessTimer = 0f; // Renamed
+	private bool isProcessing = false; // Is the station's timer running?
+	private float currentProcessTimer = 0f;
 	private RecipeData currentRecipe = null;
 	private Collider triggerCollider;
-	private ParticleSystem currentProcessingEffectInstance = null; // Renamed
 	private AudioSource audioSource;
+
+	private ParticleSystem currentStationProcessingVFXInstance = null; // Instance of station's own timed VFX
+	private ParticleSystem currentPlayerHoldActionVFXInstance = null; // Instance of the starburst VFX
 
 	void Awake()
 	{
 		triggerCollider = GetComponent<Collider>();
-		audioSource = GetComponent<AudioSource>(); // Get the AudioSource
+		audioSource = GetComponent<AudioSource>();
 
 		if (!triggerCollider.isTrigger) { Debug.LogWarning($"Collider on {gameObject.name} not 'Is Trigger'.", this); }
-		if (resultSpawnPoint == null) { Debug.LogWarning($"{gameObject.name} missing Result Spawn Point!", this); resultSpawnPoint = transform; }
+		if (resultSpawnPoint == null) { Debug.LogWarning($"{gameObject.name} missing Result Spawn Point! Using own transform as fallback for results/VFX.", this); resultSpawnPoint = transform; }
 		if (availableRecipes == null || availableRecipes.Count == 0) { Debug.LogWarning($"{gameObject.name} has no recipes!", this); }
 		if (progressBar != null) { progressBar.gameObject.SetActive(false); progressBar.value = 0; }
-		if (cookingEffectPrefab == null) { Debug.LogWarning($"CookingStation on {gameObject.name} is missing its Cooking Effect Prefab assignment!", this); }
 		if (audioSource == null) { Debug.LogWarning($"CookingStation on {gameObject.name} is missing an AudioSource component for sounds!", this); }
+		if (playerHoldActionVFXPrefab == null) { Debug.LogWarning($"CookingStation on {gameObject.name} is missing its Player Hold Action VFX Prefab assignment! This VFX will not play.", this); }
 	}
 
 	void Update()
 	{
-		if (isProcessing)
+		if (isProcessing) // Only if station's timer is active
 		{
-			UpdateHoldToProcess(Time.deltaTime); // Renamed
+			UpdateHoldToProcess(Time.deltaTime);
 		}
 		if (progressBar != null && progressBar.gameObject.activeSelf)
 		{
@@ -54,11 +59,15 @@ public class CookingStation : MonoBehaviour
 
 	void OnDestroy()
 	{
-		if (currentProcessingEffectInstance != null)
+		if (currentStationProcessingVFXInstance != null)
 		{
-			Destroy(currentProcessingEffectInstance.gameObject);
+			Destroy(currentStationProcessingVFXInstance.gameObject);
 		}
-		// Ensure looping sound is stopped if station is destroyed
+		if (currentPlayerHoldActionVFXInstance != null)
+		{
+			Destroy(currentPlayerHoldActionVFXInstance.gameObject);
+		}
+
 		if (audioSource != null && audioSource.isPlaying && audioSource.loop)
 		{
 			audioSource.Stop();
@@ -83,20 +92,29 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
-	public bool StartHoldToCook() // Method name in PickupController is StartHoldToCook
+	// Called by PickupController when Q is PRESSED
+	public bool StartHoldToCook()
 	{
-		if (isProcessing) return false;
+		if (isProcessing) // If station's timer is already running, don't restart.
+		{
+			// If player presses Q again while it's already processing,
+			// ensure the hold VFX is playing if it somehow got stopped.
+			// This scenario might be rare depending on PickupController logic.
+			if (currentPlayerHoldActionVFXInstance == null)
+			{
+				PlayPlayerHoldActionVFX();
+			}
+			return false; // Indicate that the station was already processing.
+		}
 
 		ingredientsOnStation.RemoveAll(item => item == null || item.gameObject == null || (item.Rb != null && item.Rb.isKinematic));
 		List<IngredientData> currentIngredientsData = ingredientsOnStation.Where(p => p != null && p.ingredientData != null).Select(p => p.ingredientData).ToList();
 
-		if (currentIngredientsData.Count == 0) { return false; }
-
 		currentRecipe = FindMatchingRecipe(currentIngredientsData);
 
-		if (currentRecipe != null)
+		if (currentRecipe != null) // A valid recipe is present, so station timer will start
 		{
-			isProcessing = true;
+			isProcessing = true; // Station's internal timer will start
 			currentProcessTimer = 0f;
 
 			if (progressBar != null)
@@ -107,85 +125,127 @@ public class CookingStation : MonoBehaviour
 				progressBar.gameObject.SetActive(true);
 			}
 
-			if (cookingEffectPrefab != null)
+			// Start station's own continuous processing VFX (optional)
+			if (stationProcessingVFXPrefab != null)
 			{
-				currentProcessingEffectInstance = Instantiate(cookingEffectPrefab, resultSpawnPoint.position, resultSpawnPoint.rotation);
-				currentProcessingEffectInstance.Play();
+				Vector3 effectPosition = (resultSpawnPoint != null) ? resultSpawnPoint.position : transform.position;
+				currentStationProcessingVFXInstance = Instantiate(stationProcessingVFXPrefab, effectPosition, Quaternion.identity, transform);
+				currentStationProcessingVFXInstance.Play();
 			}
 
-			// Play Start Sound
-			if (audioSource != null && processStartSound != null)
-			{
-				audioSource.PlayOneShot(processStartSound);
-			}
-			// Play Looping Sound
+			// --- Play Player Hold Action VFX only if a recipe is matched and processing starts ---
+			PlayPlayerHoldActionVFX();
+			// ------------------------------------------------------------------------------------
+
+			if (audioSource != null && processStartSound != null) audioSource.PlayOneShot(processStartSound);
 			if (audioSource != null && processingLoopSound != null)
 			{
 				audioSource.clip = processingLoopSound;
 				audioSource.loop = true;
 				audioSource.Play();
 			}
-
-			return true;
+			return true; // Indicate that processing has started
 		}
-		return false;
-	}
-
-	private void UpdateHoldToProcess(float deltaTime) // Renamed
-	{
-		if (!isProcessing || currentRecipe == null) return;
-
-		currentProcessTimer += deltaTime;
-		if (progressBar != null) { progressBar.value = currentProcessTimer; }
-
-		if (currentProcessTimer >= currentRecipe.cookingDuration)
+		else
 		{
-			CompleteProcessing(); // Renamed
+			// No valid recipe, so station timer does not start.
+			// Player might still be holding Q, but the "playerHoldActionVFX" should not play.
+			// Ensure it's stopped if it was somehow active from a previous interrupted state.
+			StopPlayerHoldActionVFX(); // Make sure it's off if no recipe.
+			return false; // Indicate that no processing started. PickupController might use this.
 		}
 	}
 
-	public void CancelHoldToCook() // Method name in PickupController is CancelHoldToCook
+	// Called by PickupController when Q is RELEASED or if station's timer completes
+	public void CancelHoldToCook()
 	{
-		if (!isProcessing) return;
+		// This method is called when Q is released OR when CompleteProcessing finishes.
+		// It should stop all effects related to this station's active processing.
 
-		isProcessing = false;
-		// currentRecipe = null; // Keep currentRecipe for CompleteSound if needed, will be nulled in CompleteProcessing
-		// currentProcessTimer = 0f; // Timer gets reset too
+		bool wasProcessing = isProcessing; // Store if we were actively processing
+		isProcessing = false; // Stop the station's internal timer/state immediately
+
+		StopPlayerHoldActionVFX(); // Stop the hold action VFX regardless of previous state, as the hold is over.
 
 		if (progressBar != null) { progressBar.gameObject.SetActive(false); progressBar.value = 0; }
 
-		if (currentProcessingEffectInstance != null)
+		if (currentStationProcessingVFXInstance != null)
 		{
-			currentProcessingEffectInstance.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-			Destroy(currentProcessingEffectInstance.gameObject, 2f);
-			currentProcessingEffectInstance = null;
+			currentStationProcessingVFXInstance.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+			Destroy(currentStationProcessingVFXInstance.gameObject, currentStationProcessingVFXInstance.main.startLifetime.constantMax + 0.5f);
+			currentStationProcessingVFXInstance = null;
 		}
 
-		// Stop Looping Sound
-		if (audioSource != null && audioSource.isPlaying && audioSource.clip == processingLoopSound)
-		{
-			audioSource.Stop();
-			audioSource.loop = false; // Important to reset loop state
-		}
-	}
-
-	private void CompleteProcessing() // Renamed
-	{
-		if (!isProcessing || currentRecipe == null) return; // Should already be true from UpdateHoldToProcess
-
-		// Stop Looping Sound first if it's still playing (though CancelHoldToCook might be called after this by some logic)
 		if (audioSource != null && audioSource.isPlaying && audioSource.clip == processingLoopSound)
 		{
 			audioSource.Stop();
 			audioSource.loop = false;
 		}
-		// Play Complete Sound
-		if (audioSource != null && processCompleteSound != null)
-		{
-			audioSource.PlayOneShot(processCompleteSound);
-		}
 
-		Debug.Log($"Process Complete: {currentRecipe.recipeName}!");
+		// If it was processing and now cancelled, reset recipe and timer
+		// This prevents CompleteProcessing from running again if cancelled early.
+		if (wasProcessing)
+		{
+			currentRecipe = null;
+			currentProcessTimer = 0f;
+		}
+	}
+
+	private void PlayPlayerHoldActionVFX()
+	{
+		if (playerHoldActionVFXPrefab != null)
+		{
+			if (currentPlayerHoldActionVFXInstance == null) // Only instantiate if not already playing
+			{
+				Vector3 effectPosition = (resultSpawnPoint != null) ? resultSpawnPoint.position : transform.position;
+				// Ensure VFX is oriented nicely, e.g., always facing up or matching station's up vector
+				Quaternion vfxRotation = Quaternion.LookRotation(Vector3.up, transform.up); // Example: VFX "looks" upwards, aligned with station's up
+																							// Or simply Quaternion.identity if the prefab is authored to look good without specific rotation
+				currentPlayerHoldActionVFXInstance = Instantiate(playerHoldActionVFXPrefab, effectPosition, vfxRotation, transform); // Parent to station
+				currentPlayerHoldActionVFXInstance.Play();
+				Debug.Log($"CookingStation [{gameObject.name}]: Playing Player Hold Action VFX.");
+			}
+		}
+	}
+
+	private void StopPlayerHoldActionVFX()
+	{
+		if (currentPlayerHoldActionVFXInstance != null)
+		{
+			currentPlayerHoldActionVFXInstance.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+			// Use the particle system's own main duration + startLifetime for a more accurate destroy delay
+			float destroyDelay = currentPlayerHoldActionVFXInstance.main.duration + currentPlayerHoldActionVFXInstance.main.startLifetime.constantMax;
+			Destroy(currentPlayerHoldActionVFXInstance.gameObject, destroyDelay + 0.1f); // Add small buffer
+			currentPlayerHoldActionVFXInstance = null;
+			Debug.Log($"CookingStation [{gameObject.name}]: Stopped Player Hold Action VFX.");
+		}
+	}
+
+	private void UpdateHoldToProcess(float deltaTime)
+	{
+		if (!isProcessing || currentRecipe == null) return;
+		currentProcessTimer += deltaTime;
+		if (progressBar != null) { progressBar.value = currentProcessTimer; }
+		if (currentProcessTimer >= currentRecipe.cookingDuration)
+		{
+			CompleteProcessing();
+		}
+	}
+
+	private void CompleteProcessing()
+	{
+		if (!isProcessing || currentRecipe == null) return; // Should not happen if called from UpdateHoldToProcess
+
+		Debug.Log($"Process Complete: {currentRecipe.recipeName} on {gameObject.name}!");
+
+		// Stop this station's looping sound (if any) before playing complete sound
+		if (audioSource != null && audioSource.isPlaying && audioSource.clip == processingLoopSound)
+		{
+			audioSource.Stop();
+			audioSource.loop = false;
+		}
+		if (audioSource != null && processCompleteSound != null) audioSource.PlayOneShot(processCompleteSound);
+
 		List<Pickupable> itemsToDestroy = new List<Pickupable>(ingredientsOnStation);
 		foreach (Pickupable ingredient in itemsToDestroy) { if (ingredient != null) Destroy(ingredient.gameObject); }
 		ingredientsOnStation.Clear();
@@ -196,30 +256,20 @@ public class CookingStation : MonoBehaviour
 		}
 		else { Debug.LogError($"Recipe '{currentRecipe.recipeName}' has no result prefab!"); }
 
-		// Cache recipe name for log before nullifying
-		// string completedRecipeName = currentRecipe.recipeName;
+		// This will also call StopPlayerHoldActionVFX()
+		CancelHoldToCook(); // Resets station state, stops its VFX, progress bar, and player hold VFX.
 
-		// Reset all processing states
-		bool wasProcessing = isProcessing;
-		isProcessing = false; // Set before calling Cancel, so it doesn't try to stop sounds again if Cancel is called
+		// Ensure these are reset after CancelHoldToCook has done its job with the current values if needed
+		isProcessing = false;
 		currentRecipe = null;
 		currentProcessTimer = 0f;
-
-
-		if (wasProcessing) // Ensure CancelHoldToCook's effects like stopping particles only happen if it was truly active
-		{
-			CancelHoldToCook(); // This will hide progress bar, stop particles.
-		}
 	}
 
 	private RecipeData FindMatchingRecipe(List<IngredientData> currentIngredients)
 	{
 		foreach (RecipeData recipe in availableRecipes)
 		{
-			if (DoIngredientsMatch(recipe.requiredIngredients, currentIngredients))
-			{
-				return recipe;
-			}
+			if (DoIngredientsMatch(recipe.requiredIngredients, currentIngredients)) return recipe;
 		}
 		return null;
 	}
@@ -232,10 +282,7 @@ public class CookingStation : MonoBehaviour
 		if (requiredCounts.Count != currentCounts.Count) return false;
 		foreach (var kvp in requiredCounts)
 		{
-			if (!currentCounts.ContainsKey(kvp.Key) || currentCounts[kvp.Key] != kvp.Value)
-			{
-				return false;
-			}
+			if (!currentCounts.ContainsKey(kvp.Key) || currentCounts[kvp.Key] != kvp.Value) return false;
 		}
 		return true;
 	}
