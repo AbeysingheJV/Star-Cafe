@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dff3a5c7e8ebc694983786b768e16b0d, type: 3}
+  m_Name: R_Salad
+  m_EditorClassIdentifier: 
+  recipeName: Vegetable Salad
+  requiredIngredients:
+  - {fileID: 11400000, guid: 0197587fcf955f145b46e3983a623d9e, type: 2}
+  - {fileID: 11400000, guid: 6aef6b331c939b44ca9fb727871f1cee, type: 2}
+  - {fileID: 11400000, guid: 388fa9a664d34fb41a57dd1d460db614, type: 2}
+  - {fileID: 11400000, guid: 882e6c3164997954aa7796bcac362ea2, type: 2}
+  - {fileID: 11400000, guid: 5f44110462cede244acf63b943762eaa, type: 2}
+  resultPrefab: {fileID: 2244577606202969946, guid: fb5254d12ff6a964f85d6bde22514a3b,
+    type: 3}
+  cookingDuration: 5
+  resultDishTag: SaladDish

@@ -10,11 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dff3a5c7e8ebc694983786b768e16b0d, type: 3}
-  m_Name: R_Milkshake
+  m_Name: R_Milkshake 1
   m_EditorClassIdentifier: 
   recipeName: Milkshake
   requiredIngredients:
   - {fileID: 11400000, guid: db1f1f3d2c61a1249be47de86c7a8cc5, type: 2}
-  resultPrefab: {fileID: 0}
-  cookingDuration: 3
-  resultDishTag: MilkshakeDish
+  resultPrefab: {fileID: 5344453670103961128, guid: abcb9060bd89b5c47845706a627dbfaf,
+    type: 3}
+  cookingDuration: 2
+  resultDishTag: DrinkDish
