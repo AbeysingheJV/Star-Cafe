@@ -26,6 +26,8 @@ public class CatAI : MonoBehaviour
 	[SerializeField] private float rotationSpeed = 120f;
 	[SerializeField] private float sitDuration = 5f;
 
+	public string interactionPrompt = "Pet";
+
 	private Coroutine currentActionCoroutine;
 	private bool isCurrentlySitting = false;
 

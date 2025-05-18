@@ -24,7 +24,21 @@ public class IngredientSource : MonoBehaviour
 		return ingredientPrefab;
 	}
 
-	
+	public string GetIngredientName()
+	{
+		if (ingredientPrefab != null)
+		{
+			Pickupable p = ingredientPrefab.GetComponent<Pickupable>();
+			if (p != null && p.ingredientData != null && !string.IsNullOrEmpty(p.ingredientData.displayName))
+			{
+				return p.ingredientData.displayName;
+			}
+			return ingredientPrefab.name; // Fallback
+		}
+		return "Item";
+	}
+
+
 	void Start()
 	{
 		if (GetComponent<Collider>() == null)

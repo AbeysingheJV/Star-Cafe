@@ -24,15 +24,15 @@ TagManager:
   - Water
   - UI
   - Pickupable
-  - Counter
+  - Counter1
   - HeldItem
   - IngredientSources
   - Environment
   - General_Interactable
   - CatLayer
-  - 
-  - 
-  - 
+  - Radio
+  - Book
+  - Counter2
   - 
   - 
   - 
