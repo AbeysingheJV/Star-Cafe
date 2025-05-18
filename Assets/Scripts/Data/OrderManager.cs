@@ -48,12 +48,13 @@ public class OrderManager : MonoBehaviour
 		}
 
 		// GameDataManager should call ApplyUnlockedRecipesFromLoad.
-		// This Start() logic is a fallback if GameDataManager hasn't initialized the pool yet.
+		// This Start() logic is a fallback if GameDataManager hasn't initialized the pool yet
+		// (e.g., if running this scene directly in editor without the main menu flow).
 		if (activeOrderPool.Count == 0)
 		{
 			if (initialPossibleOrders != null && initialPossibleOrders.Count > 0)
 			{
-				Debug.LogWarning("OrderManager: Active order pool is empty at Start. Populating with initialPossibleOrders. GameDataManager should ideally manage this for new/loaded games.");
+				Debug.LogWarning("OrderManager: Active order pool empty at Start. Populating with initialPossibleOrders. GameDataManager should ideally manage this for new/loaded games.");
 				// Convert RecipeData list to list of names for ApplyUnlockedRecipesFromLoad
 				// This ensures consistency with how loaded save data is handled.
 				List<string> initialRecipeNames = new List<string>();
@@ -71,9 +72,11 @@ public class OrderManager : MonoBehaviour
 			else
 			{
 				Debug.LogWarning("OrderManager: No recipes available at Start (initial list also empty or null).");
-				UpdateOrderUI();
+				UpdateOrderUI(); // To show "No Orders Available"
 			}
 		}
+		// If activeOrderPool was populated by GDM's ApplyUnlockedRecipesFromLoad, 
+		// GetNextOrder would have been called from there.
 	}
 
 	// Called by GameDataManager when loading a save or starting a new game
@@ -91,6 +94,7 @@ public class OrderManager : MonoBehaviour
 				foreach (string recipeName in unlockedRecipeNames)
 				{
 					if (string.IsNullOrEmpty(recipeName)) continue;
+					// Find the RecipeData asset from RewardManager's master list
 					RecipeData recipe = RewardManager.Instance.allUnlockableRecipesPool.Find(r => r != null && r.name == recipeName);
 					if (recipe != null)
 					{
@@ -115,9 +119,10 @@ public class OrderManager : MonoBehaviour
 		}
 
 		// If the pool is still empty (e.g., new game where unlockedRecipeNames was empty, or saved recipes couldn't be found)
-		// then populate with initialPossibleOrders.
-		if (activeOrderPool.Count == 0 && initialPossibleOrders != null)
+		// OR if unlockedRecipeNames was null/empty to begin with, then use initialPossibleOrders.
+		if (activeOrderPool.Count == 0 && initialPossibleOrders != null && initialPossibleOrders.Count > 0)
 		{
+			Debug.Log("OrderManager: Active pool empty after processing saved names (or no saved names given), using initialPossibleOrders.");
 			foreach (RecipeData recipe in initialPossibleOrders)
 			{
 				if (recipe != null && !activeOrderPool.Contains(recipe))
@@ -126,7 +131,8 @@ public class OrderManager : MonoBehaviour
 					appliedAnyFromInitial = true;
 				}
 			}
-			if (appliedAnyFromInitial) Debug.Log($"OrderManager: Populated with {activeOrderPool.Count} initial recipes because save data was effectively empty or recipes couldn't be resolved.");
+			if (appliedAnyFromInitial && !(unlockedRecipeNames != null && unlockedRecipeNames.Count > 0))
+				Debug.Log($"OrderManager: Populated with {activeOrderPool.Count} initial recipes.");
 		}
 
 		currentSequentialIndex = -1;
@@ -149,7 +155,7 @@ public class OrderManager : MonoBehaviour
 		{
 			noMoreOrdersAvailable = true;
 			currentOrder = null;
-			Debug.Log("OrderManager: No recipes in active pool to choose from.");
+			// Debug.Log("OrderManager: No recipes in active pool to choose from."); // Can be noisy
 			UpdateOrderUI();
 			return;
 		}
@@ -166,24 +172,26 @@ public class OrderManager : MonoBehaviour
 				{
 					currentOrder = activeOrderPool[Random.Range(0, activeOrderPool.Count)];
 					attempts++;
-				} while (currentOrder == previousOrder && attempts < activeOrderPool.Count * 2);
+				} while (currentOrder == previousOrder && attempts < activeOrderPool.Count * 2); // Avoid infinite loop if all remaining orders are the same
 			}
-			else if (activeOrderPool.Count > 0)
+			else if (activeOrderPool.Count > 0) // Ensure there's at least one to pick
 			{
 				currentOrder = activeOrderPool[Random.Range(0, activeOrderPool.Count)];
 			}
+			// else: activeOrderPool.Count is 0, caught by the initial check
 		}
-		else
+		else // Sequential 
 		{
-			if (activeOrderPool.Count > 0)
+			if (activeOrderPool.Count > 0) // Ensure there's at least one to pick
 			{
 				currentSequentialIndex++;
 				if (currentSequentialIndex >= activeOrderPool.Count)
 				{
-					currentSequentialIndex = 0;
+					currentSequentialIndex = 0; // Loop
 				}
 				currentOrder = activeOrderPool[currentSequentialIndex];
 			}
+			// else: activeOrderPool.Count is 0, caught by the initial check
 		}
 
 		UpdateOrderUI();
@@ -202,7 +210,7 @@ public class OrderManager : MonoBehaviour
 			{
 				currentOrderText.text = $"Order: {currentOrder.recipeName}";
 			}
-			else
+			else // Handles noMoreOrdersAvailable or empty activeOrderPool
 			{
 				currentOrderText.text = "No Orders Available";
 			}
@@ -217,27 +225,30 @@ public class OrderManager : MonoBehaviour
 
 	public void OrderCompleted()
 	{
-		if (currentOrder == null) return;
+		if (currentOrder == null) return; // Should not happen if CheckOrderCompletion was true
 		Debug.Log($"Order '{currentOrder.recipeName}' Completed!");
 
 		if (audioSource != null && orderCompleteSound != null) audioSource.PlayOneShot(orderCompleteSound);
 
+		// Notify RewardManager (which then notifies GameDataManager)
 		if (RewardManager.Instance != null)
 		{
 			RewardManager.Instance.IncrementDishesCompleted();
 		}
 
-		if (CatAI.Instance != null) CatAI.Instance.TriggerMiauAndSound();
+		if (CatAI.Instance != null) CatAI.Instance.TriggerMiauAndSound(); // If you have a cat
 		GetNextOrder();
 	}
 
+	// Called by RewardManager (which is called by GameDataManager) to add a newly unlocked recipe
+	// to the current session's active pool.
 	public void UnlockNewRecipe(RecipeData newRecipe)
 	{
 		if (newRecipe != null && !activeOrderPool.Contains(newRecipe))
 		{
 			activeOrderPool.Add(newRecipe);
 			Debug.Log($"OrderManager: New recipe '{newRecipe.recipeName}' added to active order pool for current session.");
-			if (currentOrder == null || noMoreOrdersAvailable)
+			if (currentOrder == null || noMoreOrdersAvailable) // If we were out of orders, try to get a new one
 			{
 				GetNextOrder();
 			}

@@ -1,7 +1,8 @@
 using UnityEngine;
-using System.Collections.Generic; // For List
-using System.Linq; // For Linq operations like .ToList()
-using System; // For DateTime
+using System.Collections.Generic;
+using System.Linq;
+using System;
+using UnityEngine.SceneManagement; // Required for scene management
 
 public class GameDataManager : MonoBehaviour
 {
@@ -13,14 +14,20 @@ public class GameDataManager : MonoBehaviour
 	public int TotalDishesCompleted { get; private set; }
 	public List<string> UnlockedRecipeNames { get; private set; } = new List<string>();
 	public List<string> UnlockedMusicTrackNames { get; private set; } = new List<string>();
-	// Add list for awarded milestone names if you want to save that centrally
-	// public List<string> AwardedMilestoneNames { get; private set; } = new List<string>();
 
-
-	[Header("System References (Optional - for direct application)")]
+	[Header("System References (Can be auto-found if not assigned)")]
 	[SerializeField] private OrderManager orderManager;
 	[SerializeField] private BackgroundMusicPlayer musicPlayer;
 	[SerializeField] private RewardManager rewardManager;
+
+	[Header("Default New Game Unlocks")]
+	public List<RecipeData> defaultInitialRecipes;
+	public List<AudioClip> defaultInitialMusicTracks;
+
+	private SaveData pendingDataToApply = null;
+	private bool hasPendingDataToApply = false;
+	private string sceneToLoadAfterDataPrep = "";
+
 
 	void Awake()
 	{
@@ -33,154 +40,185 @@ public class GameDataManager : MonoBehaviour
 		DontDestroyOnLoad(gameObject);
 
 		SaveSystem.Initialize();
+
+		// Attempt to find managers if not assigned in Inspector,
+		// but this might be too early if they are in a scene not yet loaded.
+		// We'll re-check in OnSceneLoaded.
+		if (orderManager == null) orderManager = FindObjectOfType<OrderManager>();
+		if (musicPlayer == null) musicPlayer = FindObjectOfType<BackgroundMusicPlayer>();
+		if (rewardManager == null) rewardManager = FindObjectOfType<RewardManager>();
 	}
 
-	public void StartNewGame(int slotNumber)
+	void OnEnable()
+	{
+		SceneManager.sceneLoaded += OnSceneLoaded;
+	}
+
+	void OnDisable()
+	{
+		SceneManager.sceneLoaded -= OnSceneLoaded;
+	}
+
+	void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+	{
+		// Re-acquire references to scene-specific managers
+		if (orderManager == null) orderManager = FindObjectOfType<OrderManager>();
+		if (musicPlayer == null) musicPlayer = FindObjectOfType<BackgroundMusicPlayer>(); // Though BGMusicPlayer is often DDOL too
+		if (rewardManager == null) rewardManager = FindObjectOfType<RewardManager>();
+
+		if (hasPendingDataToApply && pendingDataToApply != null && scene.name == sceneToLoadAfterDataPrep)
+		{
+			Debug.Log($"GameDataManager: Scene '{scene.name}' loaded. Applying pending save data.");
+			ApplySaveDataToGameInternal(pendingDataToApply);
+			pendingDataToApply = null;
+			hasPendingDataToApply = false;
+			sceneToLoadAfterDataPrep = "";
+		}
+	}
+
+	public void PrepareNewGame(int slotNumber, string gameSceneName)
 	{
 		CurrentSaveSlot = slotNumber;
-		SaveData newSave = new SaveData(); // Creates data with default values (0 dishes, empty lists)
+		sceneToLoadAfterDataPrep = gameSceneName;
+		SaveData newSave = new SaveData();
 
-		// If you have initial recipes/music that should always be available for a new game,
-		// populate them here before applying and saving.
-		// Example:
-		// if (OrderManager.Instance != null && OrderManager.Instance.initialPossibleOrders != null)
-		// {
-		//     foreach (RecipeData recipe in OrderManager.Instance.initialPossibleOrders)
-		//     {
-		//         if (recipe != null && !newSave.unlockedRecipeNames.Contains(recipe.name))
-		//         {
-		//             newSave.unlockedRecipeNames.Add(recipe.name);
-		//         }
-		//     }
-		// }
-		// Similarly for initial music tracks if BackgroundMusicPlayer has an initial list.
+		// Populate initial recipes from GameDataManager's own list
+		if (defaultInitialRecipes != null)
+		{
+			foreach (RecipeData recipe in defaultInitialRecipes)
+			{
+				if (recipe != null && !string.IsNullOrEmpty(recipe.name) && !newSave.unlockedRecipeNames.Contains(recipe.name))
+				{
+					newSave.unlockedRecipeNames.Add(recipe.name);
+				}
+			}
+		}
+		else Debug.LogWarning("GameDataManager: 'defaultInitialRecipes' list not assigned in Inspector. New game might miss initial recipes.");
 
-
-		ApplySaveDataToGame(newSave);
-		SaveCurrentGameState(); // Save this new game state immediately
-		Debug.Log($"GameDataManager: New game started in slot {CurrentSaveSlot}. Initial save created.");
+		// Populate initial music from GameDataManager's own list
+		if (defaultInitialMusicTracks != null)
+		{
+			foreach (AudioClip track in defaultInitialMusicTracks)
+			{
+				if (track != null && !string.IsNullOrEmpty(track.name) && !newSave.unlockedMusicTrackNames.Contains(track.name))
+				{
+					newSave.unlockedMusicTrackNames.Add(track.name);
+				}
+			}
+		}
+		else Debug.LogWarning("GameDataManager: 'defaultInitialMusicTracks' list not assigned in Inspector. New game might miss initial music.");
+		pendingDataToApply = newSave;
+		hasPendingDataToApply = true;
+		SaveCurrentDataToSlot(newSave);
+		Debug.Log($"GameDataManager: New game prepared for slot {CurrentSaveSlot}. Initial data created and saved. Will apply after scene '{gameSceneName}' loads.");
 	}
 
-	public bool LoadGameFromSlot(int slotNumber)
+	public bool PrepareLoadGameFromSlot(int slotNumber, string gameSceneName)
 	{
 		SaveData loadedData = SaveSystem.LoadGame(slotNumber);
 		if (loadedData != null)
 		{
 			CurrentSaveSlot = slotNumber;
-			ApplySaveDataToGame(loadedData);
-			Debug.Log($"GameDataManager: Game loaded from slot {CurrentSaveSlot}.");
+			sceneToLoadAfterDataPrep = gameSceneName;
+			pendingDataToApply = loadedData;
+			hasPendingDataToApply = true;
+			Debug.Log($"GameDataManager: Game data prepared for load from slot {CurrentSaveSlot}. Will apply after scene '{gameSceneName}' loads.");
 			return true;
 		}
-		Debug.LogError($"GameDataManager: Failed to load game from slot {slotNumber}.");
+		Debug.LogError($"GameDataManager: Failed to prepare load game from slot {slotNumber}.");
 		return false;
 	}
 
-	public void ApplySaveDataToGame(SaveData data)
+	private void ApplySaveDataToGameInternal(SaveData data)
 	{
 		if (data == null)
 		{
-			Debug.LogError("GameDataManager: ApplySaveDataToGame called with null data! Starting fresh for this session.");
-			data = new SaveData(); // Fallback to new save data for current session
+			Debug.LogError("GameDataManager: ApplySaveDataToGameInternal called with null data!");
+			return;
 		}
 
 		TotalDishesCompleted = data.totalDishesCompleted;
 		UnlockedRecipeNames = new List<string>(data.unlockedRecipeNames ?? new List<string>());
 		UnlockedMusicTrackNames = new List<string>(data.unlockedMusicTrackNames ?? new List<string>());
-		// AwardedMilestoneNames = new List<string>(data.awardedMilestoneNames ?? new List<string>());
-
 
 		Debug.Log($"Applying Save Data: Dishes={TotalDishesCompleted}, Recipes={UnlockedRecipeNames.Count}, Music={UnlockedMusicTrackNames.Count}");
-
-		// Ensure instances are found if not assigned in Inspector
-		if (rewardManager == null) rewardManager = RewardManager.Instance;
-		if (orderManager == null) orderManager = OrderManager.Instance;
-		if (musicPlayer == null) musicPlayer = BackgroundMusicPlayer.Instance;
 
 		if (rewardManager != null)
 		{
 			rewardManager.SetTotalDishesCompletedFromLoad(TotalDishesCompleted);
-			// If storing milestone status in SaveData:
-			// rewardManager.ApplyAwardedMilestonesFromLoad(AwardedMilestoneNames);
 		}
-		else Debug.LogWarning("GameDataManager: RewardManager instance not found during ApplySaveDataToGame.");
+		else Debug.LogWarning("GameDataManager: RewardManager instance not found during ApplySaveDataToGameInternal.");
 
 		if (orderManager != null)
 		{
 			orderManager.ApplyUnlockedRecipesFromLoad(UnlockedRecipeNames);
 		}
-		else Debug.LogWarning("GameDataManager: OrderManager instance not found during ApplySaveDataToGame.");
-
+		else Debug.LogWarning("GameDataManager: OrderManager instance not found during ApplySaveDataToGameInternal.");
 
 		if (musicPlayer != null)
 		{
-			musicPlayer.ApplyUnlockedMusicFromLoad(UnlockedMusicTrackNames); // This method needs to be added to BackgroundMusicPlayer
+			musicPlayer.ApplyUnlockedMusicFromLoad(UnlockedMusicTrackNames);
 		}
-		else Debug.LogWarning("GameDataManager: BackgroundMusicPlayer instance not found during ApplySaveDataToGame.");
+		else Debug.LogWarning("GameDataManager: BackgroundMusicPlayer instance not found during ApplySaveDataToGameInternal.");
 	}
 
-	public void SaveCurrentGameState()
+	public void SaveActiveGameState()
 	{
 		if (CurrentSaveSlot == -1)
 		{
-			Debug.LogWarning("GameDataManager: No active save slot. Cannot save game. Call StartNewGame or LoadGameFromSlot first.");
+			Debug.LogWarning("GameDataManager: No active save slot. Cannot save game.");
 			return;
 		}
-
 		SaveData currentData = new SaveData
 		{
 			totalDishesCompleted = this.TotalDishesCompleted,
 			unlockedRecipeNames = new List<string>(this.UnlockedRecipeNames),
 			unlockedMusicTrackNames = new List<string>(this.UnlockedMusicTrackNames)
-			// awardedMilestoneNames = new List<string>(this.AwardedMilestoneNames)
 		};
-
-		SaveSystem.SaveGame(currentData, CurrentSaveSlot);
+		SaveCurrentDataToSlot(currentData);
 	}
 
-	// --- Methods to be called by other systems to update game data ---
-	public void UpdateTotalDishesCompleted(int count) // Called by RewardManager
+	private void SaveCurrentDataToSlot(SaveData dataToSave)
+	{
+		if (CurrentSaveSlot == -1) return;
+		SaveSystem.SaveGame(dataToSave, CurrentSaveSlot);
+	}
+
+	public void UpdateTotalDishesCompleted(int count)
 	{
 		TotalDishesCompleted = count;
-		Debug.Log($"GameDataManager: TotalDishesUpdated to {TotalDishesCompleted}");
-		// Consider auto-saving here or at specific checkpoints, e.g., SaveCurrentGameState();
 	}
 
-	// NEW METHOD that RewardManager will call
 	public void IncrementDishesAndUpdate()
 	{
 		TotalDishesCompleted++;
 		Debug.Log($"GameDataManager: TotalDishesCompleted incremented to {TotalDishesCompleted}");
-		// Optionally save after every dish, or batch saves
-		// SaveCurrentGameState(); // Uncomment if you want to save after every dish
 	}
 
-	public void AddUnlockedRecipe(string recipeName) // Called by RewardManager
+	public void AddUnlockedRecipe(string recipeName)
 	{
-		if (!UnlockedRecipeNames.Contains(recipeName))
+		if (!string.IsNullOrEmpty(recipeName) && !UnlockedRecipeNames.Contains(recipeName))
 		{
 			UnlockedRecipeNames.Add(recipeName);
-			Debug.Log($"GameDataManager: Added unlocked recipe: {recipeName}");
-			// SaveCurrentGameState(); // Optional: save after every unlock
+			Debug.Log($"GameDataManager: Added unlocked recipe to session: {recipeName}");
 		}
 	}
 
-	public void AddUnlockedMusicTrack(string trackName) // Called by RewardManager
+	public void AddUnlockedMusicTrack(string trackName)
 	{
-		if (!UnlockedMusicTrackNames.Contains(trackName))
+		if (!string.IsNullOrEmpty(trackName) && !UnlockedMusicTrackNames.Contains(trackName))
 		{
 			UnlockedMusicTrackNames.Add(trackName);
-			Debug.Log($"GameDataManager: Added unlocked music track: {trackName}");
-			// SaveCurrentGameState(); // Optional: save after every unlock
+			Debug.Log($"GameDataManager: Added unlocked music track to session: {trackName}");
 		}
 	}
 
-	// Example if you move milestone tracking here
-	// public void MarkMilestoneAsAwardedInSaveData(string milestoneName)
-	// {
-	//     if (!AwardedMilestoneNames.Contains(milestoneName))
-	//     {
-	//         AwardedMilestoneNames.Add(milestoneName);
-	//         Debug.Log($"GameDataManager: Marked milestone '{milestoneName}' as awarded in save data.");
-	//     }
-	// }
+	void OnApplicationQuit()
+	{
+		Debug.Log("GameDataManager: OnApplicationQuit() called. Saving game state if a slot is active.");
+		if (CurrentSaveSlot != -1)
+		{
+			SaveActiveGameState();
+		}
+	}
 }
