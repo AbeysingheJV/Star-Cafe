@@ -10,17 +10,18 @@ public class BackgroundMusicPlayer : MonoBehaviour
 	[SerializeField] private AudioSource audioSource;
 
 	[Header("Music Tracks")]
-	[SerializeField] private List<AudioClip> initialMusicTracks; // Tracks available from the start
-	[SerializeField] private List<AudioClip> allPossibleUnlockableTracks; // ALL tracks that *can* be unlocked
+	[SerializeField] private List<AudioClip> initialMusicTracks; // Tracks available from the start of a brand new game
+	[SerializeField] private List<AudioClip> allPossibleUnlockableTracks; // ALL tracks that *can* be unlocked via rewards (must contain all tracks referenced by name in RewardManager)
 
 	[Header("Settings")]
 	[SerializeField] private bool playOnStart = true;
-	[SerializeField] private int startTrackIndexInInitial = 0; // Index within initialMusicTracks
+	[SerializeField] private int startTrackIndexInInitial = 0; // Index within initialMusicTracks for a new game
 
 	private List<AudioClip> currentlyPlayableTracks = new List<AudioClip>();
 	private int currentPlayableTrackIndex = -1;
 
-	private const string UnlockedMusicTrackKeyPrefix = "UnlockedMusic_"; // PlayerPrefs key
+	// PlayerPrefs for individual track unlock status is no longer used here.
+	// GameDataManager provides the list of unlocked track names.
 
 	void Awake()
 	{
@@ -40,7 +41,9 @@ public class BackgroundMusicPlayer : MonoBehaviour
 			return;
 		}
 
-		InitializePlayableTracks();
+		// Initialize with only initial tracks.
+		// GameDataManager will call ApplyUnlockedMusicFromLoad to add saved/unlocked tracks.
+		InitializeWithInitialTracksOnly();
 	}
 
 	void Start()
@@ -48,10 +51,13 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		audioSource.loop = true;
 		audioSource.playOnAwake = false;
 
+		// The decision to play on start might be better handled after GameDataManager has loaded data.
+		// For now, if playOnStart is true, it will try to play from the initial set,
+		// and ApplyUnlockedMusicFromLoad might change the track later if it's different.
 		if (playOnStart && currentlyPlayableTracks.Count > 0)
 		{
 			int playIndex = startTrackIndexInInitial;
-			if (playIndex < 0 || playIndex >= currentlyPlayableTracks.Count) // Safety check against initial list size
+			if (playIndex < 0 || playIndex >= currentlyPlayableTracks.Count)
 			{
 				playIndex = 0;
 			}
@@ -59,53 +65,88 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		}
 		else if (currentlyPlayableTracks.Count == 0)
 		{
-			Debug.LogWarning("BackgroundMusicPlayer: No tracks available to play on start.");
+			Debug.LogWarning("BackgroundMusicPlayer: No tracks available to play on start (initial list empty or not yet loaded).");
 		}
 	}
 
-	private void InitializePlayableTracks()
+	private void InitializeWithInitialTracksOnly()
 	{
 		currentlyPlayableTracks.Clear();
 		if (initialMusicTracks != null)
 		{
-			currentlyPlayableTracks.AddRange(initialMusicTracks);
-		}
-
-		// Check PlayerPrefs for additionally unlocked tracks
-		if (allPossibleUnlockableTracks != null)
-		{
-			foreach (AudioClip track in allPossibleUnlockableTracks)
+			foreach (AudioClip track in initialMusicTracks)
 			{
-				if (PlayerPrefs.GetInt(UnlockedMusicTrackKeyPrefix + track.name, 0) == 1)
+				if (track != null && !currentlyPlayableTracks.Contains(track))
 				{
-					if (!currentlyPlayableTracks.Contains(track)) // Avoid duplicates if also in initial list
+					currentlyPlayableTracks.Add(track);
+				}
+			}
+		}
+		Debug.Log($"BackgroundMusicPlayer: Initialized with {currentlyPlayableTracks.Count} initial tracks.");
+	}
+
+	// Called by GameDataManager when loading a save or starting a new game (which includes initial unlocks)
+	public void ApplyUnlockedMusicFromLoad(List<string> loadedUnlockedTrackNames)
+	{
+		InitializeWithInitialTracksOnly(); // Always start with the base initial tracks
+
+		if (loadedUnlockedTrackNames != null && allPossibleUnlockableTracks != null)
+		{
+			foreach (string trackName in loadedUnlockedTrackNames)
+			{
+				if (string.IsNullOrEmpty(trackName)) continue;
+
+				AudioClip track = allPossibleUnlockableTracks.Find(t => t != null && t.name == trackName);
+				if (track != null)
+				{
+					if (!currentlyPlayableTracks.Contains(track)) // Add if not already in the list (e.g. from initial)
 					{
 						currentlyPlayableTracks.Add(track);
 					}
 				}
+				else
+				{
+					Debug.LogWarning($"BackgroundMusicPlayer: Could not find AudioClip asset named '{trackName}' in allPossibleUnlockableTracks pool during load.");
+				}
 			}
 		}
-		Debug.Log($"BackgroundMusicPlayer: Initialized with {currentlyPlayableTracks.Count} playable tracks.");
+		Debug.Log($"BackgroundMusicPlayer: Applied save data. Total playable tracks now: {currentlyPlayableTracks.Count}");
+
+		// If no music is playing (e.g. after loading a save that had no music playing, or new game),
+		// and playOnStart is true, try to start playing a track.
+		if (playOnStart && !audioSource.isPlaying && currentlyPlayableTracks.Count > 0)
+		{
+			// Play the first track from the now-populated currentlyPlayableTracks list
+			// or a specific loaded track if you save current track index
+			PlayTrackByIndex(0);
+		}
 	}
 
 	public void PlayTrackByIndex(int trackIndex)
 	{
 		if (currentlyPlayableTracks.Count == 0)
 		{
-			Debug.LogWarning("No tracks available in currentlyPlayableTracks.");
+			Debug.LogWarning("BackgroundMusicPlayer: No tracks available in currentlyPlayableTracks to play.");
 			return;
 		}
 		if (trackIndex < 0 || trackIndex >= currentlyPlayableTracks.Count)
 		{
 			Debug.LogWarning($"Track index {trackIndex} is out of bounds for currentlyPlayableTracks (count: {currentlyPlayableTracks.Count}). Defaulting to 0.");
-			trackIndex = 0;
-			if (currentlyPlayableTracks.Count == 0) return; // Still no tracks
+			trackIndex = 0; // Default to first track if index is bad
+			if (currentlyPlayableTracks.Count == 0) return; // Still no tracks after defaulting
 		}
 
 		currentPlayableTrackIndex = trackIndex;
-		audioSource.clip = currentlyPlayableTracks[currentPlayableTrackIndex];
-		audioSource.Play();
-		Debug.Log($"BackgroundMusicPlayer: Playing '{audioSource.clip.name}' (Index: {currentPlayableTrackIndex})");
+		if (currentlyPlayableTracks[currentPlayableTrackIndex] != null)
+		{
+			audioSource.clip = currentlyPlayableTracks[currentPlayableTrackIndex];
+			audioSource.Play();
+			Debug.Log($"BackgroundMusicPlayer: Playing '{audioSource.clip.name}' (Index: {currentPlayableTrackIndex} in current list)");
+		}
+		else
+		{
+			Debug.LogError($"BackgroundMusicPlayer: Track at index {currentPlayableTrackIndex} in currentlyPlayableTracks is null!");
+		}
 	}
 
 	// Called by player interaction (e.g., radio)
@@ -121,40 +162,50 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		PlayTrackByIndex(currentPlayableTrackIndex);
 	}
 
-	// Called by RewardManager
+	// Called by RewardManager when a new track is unlocked IN THE CURRENT SESSION
 	public void UnlockAndPlayTrackByName(string trackName)
 	{
+		if (string.IsNullOrEmpty(trackName))
+		{
+			Debug.LogWarning("BackgroundMusicPlayer: UnlockAndPlayTrackByName called with null or empty track name.");
+			return;
+		}
 		if (allPossibleUnlockableTracks == null)
 		{
 			Debug.LogWarning($"BackgroundMusicPlayer: allPossibleUnlockableTracks list is not set. Cannot unlock '{trackName}'.");
 			return;
 		}
 
-		AudioClip trackToUnlock = allPossibleUnlockableTracks.Find(t => t.name == trackName);
+		AudioClip trackToUnlock = allPossibleUnlockableTracks.Find(t => t != null && t.name == trackName);
 
 		if (trackToUnlock == null)
 		{
-			Debug.LogWarning($"BackgroundMusicPlayer: Track named '{trackName}' not found in allPossibleUnlockableTracks.");
+			Debug.LogWarning($"BackgroundMusicPlayer: Track named '{trackName}' not found in allPossibleUnlockableTracks pool.");
 			return;
 		}
 
+		bool newAddition = false;
 		if (!currentlyPlayableTracks.Contains(trackToUnlock))
 		{
 			currentlyPlayableTracks.Add(trackToUnlock);
-			PlayerPrefs.SetInt(UnlockedMusicTrackKeyPrefix + trackToUnlock.name, 1);
-			PlayerPrefs.Save();
-			Debug.Log($"BackgroundMusicPlayer: Unlocked music track '{trackToUnlock.name}'. Added to playable list.");
+			newAddition = true;
+			// GameDataManager is responsible for adding this to its list for saving (already done by RewardManager)
+			Debug.Log($"BackgroundMusicPlayer: Added '{trackToUnlock.name}' to playable list for current session.");
 		}
 		else
 		{
-			Debug.Log($"BackgroundMusicPlayer: Music track '{trackToUnlock.name}' was already unlocked/available.");
+			Debug.Log($"BackgroundMusicPlayer: Music track '{trackToUnlock.name}' was already in playable list.");
 		}
 
 		// Play the newly unlocked (or already available) track
 		int newTrackIndex = currentlyPlayableTracks.IndexOf(trackToUnlock);
 		if (newTrackIndex != -1)
 		{
-			PlayTrackByIndex(newTrackIndex);
+			// Only switch to it if it's a new addition or if you always want to switch
+			if (newAddition || audioSource.clip != trackToUnlock)
+			{
+				PlayTrackByIndex(newTrackIndex);
+			}
 		}
 	}
 
@@ -163,18 +214,6 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		audioSource.Stop();
 	}
 
-	[ContextMenu("Reset Unlocked Music Tracks (PlayerPrefs)")]
-	public void ResetUnlockedMusicTracksPlayerPrefs()
-	{
-		if (allPossibleUnlockableTracks != null)
-		{
-			foreach (AudioClip track in allPossibleUnlockableTracks)
-			{
-				PlayerPrefs.DeleteKey(UnlockedMusicTrackKeyPrefix + track.name);
-			}
-		}
-		PlayerPrefs.Save();
-		InitializePlayableTracks(); // Re-initialize to reflect changes in the editor state and current session
-		Debug.Log("PlayerPrefs for unlocked music tracks have been reset. Restart the game to see the full effect if tracks were already added to the live list.");
-	}
+	// PlayerPrefs reset for music is no longer relevant here as GameDataManager handles save data.
+	// A debug function to clear GameDataManager's music list would be in GameDataManager.
 }

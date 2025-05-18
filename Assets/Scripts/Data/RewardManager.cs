@@ -1,25 +1,24 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
-using System.Collections; // For cat facts later, can be removed if not used
 
-// Define what kind of rewards we can have
+// Define RewardType enum here so it's accessible
 public enum RewardType
 {
-	CatFact, // We'll add UI for this later if you want
+	CatFact,
 	MusicTrackUnlock,
-	NewRecipeUnlock // We'll add logic for this later if you want
+	NewRecipeUnlock
 }
 
-// Structure to define each reward milestone
+// Define MilestoneReward class here so it's accessible
 [System.Serializable]
 public class MilestoneReward
 {
-	public string milestoneName; // e.g., "5th Dish - New Song"
-	public int dishesRequired;
-	public RewardType rewardType;
-	public string rewardValue; // For Music: Name of the AudioClip asset. For CatFact: The fact itself. For Recipe: Name of RecipeData asset.
-							   // We'll use PlayerPrefs to track if it's awarded, no need for a visible bool here
+	public string milestoneName = "New Milestone"; // Default name
+	public int dishesRequired = 1;
+	public RewardType rewardType = RewardType.CatFact;
+	public string rewardValue = ""; // For CatFact: The fact itself. For Music/Recipe: Asset name.
 }
 
 public class RewardManager : MonoBehaviour
@@ -29,19 +28,18 @@ public class RewardManager : MonoBehaviour
 	[Header("Milestone Rewards Configuration")]
 	[SerializeField] private List<MilestoneReward> milestoneRewards = new List<MilestoneReward>();
 
-	// --- Fields for other reward types (we'll use them later) ---
-	[Header("Cat Fact Display (Optional - Assign if using CatFact rewards)")]
-	[SerializeField] private GameObject catFactPanel;
-	[SerializeField] private TextMeshProUGUI catFactText;
-	[SerializeField] private float catFactDisplayDuration = 5f;
+	[Header("Reward Notification UI (Assign in Inspector)")]
+	[SerializeField] private GameObject rewardNotificationPanel;
+	[SerializeField] private TextMeshProUGUI autoRewardNotificationText;
+	[SerializeField] private float notificationDisplayDuration = 5f;
 
-	[Header("Recipe Unlock Pool (Optional - Assign if using Recipe rewards)")]
-	[SerializeField] private List<RecipeData> allUnlockableRecipesPool;
+	[Header("Resource Pools for Unlocks (Assign in Inspector)")]
+	// MAKE THESE PUBLIC so OrderManager and BackgroundMusicPlayer can access them (via GameDataManager if needed)
+	public List<RecipeData> allUnlockableRecipesPool;
+	public List<AudioClip> allUnlockableMusicTracksPool;
 
-	// --- Player Progress Tracking ---
-	private const string TotalDishesCompletedKey = "TotalDishesCompleted";
-	private const string MilestoneAwardedKeyPrefix = "MilestoneAwarded_"; // e.g., MilestoneAwarded_5thDishNewSong
-	private int totalDishesCompleted;
+	private const string MilestoneAwardedKeyPrefix = "MilestoneAwarded_"; // PlayerPrefs key for individual milestone awarded status
+	private Coroutine activeNotificationCoroutine;
 
 	void Awake()
 	{
@@ -51,135 +49,140 @@ public class RewardManager : MonoBehaviour
 			return;
 		}
 		Instance = this;
-		DontDestroyOnLoad(gameObject); // Make sure rewards persist across scene loads
 
-		LoadProgress();
+		if (milestoneRewards != null)
+		{
+			milestoneRewards.Sort((r1, r2) => r1.dishesRequired.CompareTo(r2.dishesRequired));
+		}
 
-		// Sort rewards by dishes required to process them in order
-		milestoneRewards.Sort((r1, r2) => r1.dishesRequired.CompareTo(r2.dishesRequired));
+		if (rewardNotificationPanel != null) rewardNotificationPanel.SetActive(false);
+		else Debug.LogError("RewardManager: RewardNotificationPanel not assigned in Inspector!");
 
-		if (catFactPanel != null) catFactPanel.SetActive(false);
+		if (autoRewardNotificationText == null) Debug.LogWarning("RewardManager: AutoRewardNotificationText not assigned.");
+
+		if (allUnlockableRecipesPool == null) Debug.LogWarning("RewardManager: allUnlockableRecipesPool is not assigned!");
+		if (allUnlockableMusicTracksPool == null) Debug.LogWarning("RewardManager: allUnlockableMusicTracksPool is not assigned!");
 	}
 
-	private void LoadProgress()
+	public void SetTotalDishesCompletedFromLoad(int count)
 	{
-		totalDishesCompleted = PlayerPrefs.GetInt(TotalDishesCompletedKey, 0);
-		Debug.Log($"Loaded Total Dishes Completed: {totalDishesCompleted}");
-	}
-
-	private void SaveTotalDishes()
-	{
-		PlayerPrefs.SetInt(TotalDishesCompletedKey, totalDishesCompleted);
-		PlayerPrefs.Save(); // Ensure it's written to disk
-	}
-
-	private bool IsMilestoneAwarded(MilestoneReward reward)
-	{
-		// Use a consistent key format. Replace spaces in milestoneName for safety.
-		return PlayerPrefs.GetInt(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"), 0) == 1;
-	}
-
-	private void MarkMilestoneAsAwarded(MilestoneReward reward)
-	{
-		PlayerPrefs.SetInt(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"), 1);
-		PlayerPrefs.Save(); // Ensure it's written to disk
+		Debug.Log($"RewardManager: Total dishes count set to {count} from load by GameDataManager.");
+		CheckForRewards(count, true);
 	}
 
 	public void IncrementDishesCompleted()
 	{
-		totalDishesCompleted++;
-		Debug.Log($"Dish completed! Total dishes now: {totalDishesCompleted}");
-		SaveTotalDishes(); // Save immediately
-		CheckForRewards();
+		if (GameDataManager.Instance == null)
+		{
+			Debug.LogError("RewardManager: GameDataManager.Instance is null. Cannot increment dishes.");
+			return;
+		}
+		GameDataManager.Instance.IncrementDishesAndUpdate();
+		int newTotalDishes = GameDataManager.Instance.TotalDishesCompleted;
+		Debug.Log($"RewardManager: Dish completed! New total (from GDM): {newTotalDishes}");
+		CheckForRewards(newTotalDishes, false);
 	}
 
-	private void CheckForRewards()
+	private void CheckForRewards(int currentTotalDishes, bool isInitialLoadCheck)
 	{
-		Debug.Log("Checking for rewards...");
+		if (milestoneRewards == null) return;
 		foreach (MilestoneReward reward in milestoneRewards)
 		{
-			if (totalDishesCompleted >= reward.dishesRequired)
+			if (reward == null || string.IsNullOrEmpty(reward.milestoneName)) continue; // Skip invalid rewards
+
+			if (currentTotalDishes >= reward.dishesRequired)
 			{
-				if (!IsMilestoneAwarded(reward))
+				if (!IsMilestoneAwardedPlayerPrefs(reward))
 				{
-					GrantReward(reward);
-					MarkMilestoneAsAwarded(reward);
-				}
-				else
-				{
-					// Debug.Log($"Milestone '{reward.milestoneName}' already awarded.");
+					if (!isInitialLoadCheck)
+					{
+						GrantRewardPopupAndLogic(reward);
+					}
+					MarkMilestoneAsAwardedPlayerPrefs(reward);
 				}
 			}
 			else
 			{
-				// Stop checking further milestones if this one isn't met (since they are sorted)
-				// Debug.Log($"Milestone '{reward.milestoneName}' not yet reached ({totalDishesCompleted}/{reward.dishesRequired}).");
 				break;
 			}
 		}
 	}
 
-	private void GrantReward(MilestoneReward reward)
+	private void GrantRewardPopupAndLogic(MilestoneReward reward)
 	{
-		Debug.Log($"Granting reward for milestone: '{reward.milestoneName}' ({reward.dishesRequired} dishes). Type: {reward.rewardType}, Value: '{reward.rewardValue}'");
+		Debug.Log($"RewardManager: Granting reward & POPUP for milestone: '{reward.milestoneName}'. Type: {reward.rewardType}, Value: '{reward.rewardValue}'");
+		string notificationMessage = "New Reward Unlocked!";
 
 		switch (reward.rewardType)
 		{
 			case RewardType.CatFact:
-				if (catFactPanel != null && catFactText != null)
-				{
-					DisplayCatFact(reward.rewardValue);
-				}
-				else Debug.LogWarning("CatFactPanel or CatFactText not assigned in RewardManager to display CatFact.");
+				notificationMessage = "New Cat Fact Unlocked!";
+				if (GameDataManager.Instance != null) { /* GameDataManager.Instance.AddCollectedCatFact(reward.rewardValue); */ }
 				break;
 
 			case RewardType.MusicTrackUnlock:
-				if (BackgroundMusicPlayer.Instance != null)
-				{
-					// The rewardValue should be the NAME of the AudioClip asset
-					BackgroundMusicPlayer.Instance.UnlockAndPlayTrackByName(reward.rewardValue);
-				}
-				else Debug.LogWarning("BackgroundMusicPlayer instance not found. Cannot unlock music track.");
+				notificationMessage = "New Music Track Unlocked!";
+				if (GameDataManager.Instance != null) GameDataManager.Instance.AddUnlockedMusicTrack(reward.rewardValue);
+				if (BackgroundMusicPlayer.Instance != null) BackgroundMusicPlayer.Instance.UnlockAndPlayTrackByName(reward.rewardValue);
+				else Debug.LogWarning($"BackgroundMusicPlayer.Instance not found while trying to unlock track: {reward.rewardValue}");
 				break;
 
 			case RewardType.NewRecipeUnlock:
+				notificationMessage = "New Recipe Unlocked!";
+				if (GameDataManager.Instance != null) GameDataManager.Instance.AddUnlockedRecipe(reward.rewardValue);
 				if (OrderManager.Instance != null && allUnlockableRecipesPool != null)
 				{
-					RecipeData recipeToUnlock = allUnlockableRecipesPool.Find(r => r.name == reward.rewardValue);
-					if (recipeToUnlock != null)
-					{
-						OrderManager.Instance.UnlockNewRecipe(recipeToUnlock);
-					}
-					else Debug.LogWarning($"Recipe '{reward.rewardValue}' not found in allUnlockableRecipesPool.");
+					RecipeData recipeToUnlock = allUnlockableRecipesPool.Find(r => r != null && r.name == reward.rewardValue);
+					if (recipeToUnlock != null) OrderManager.Instance.UnlockNewRecipe(recipeToUnlock);
+					else Debug.LogWarning($"Recipe asset named '{reward.rewardValue}' not found in allUnlockableRecipesPool.");
 				}
-				else Debug.LogWarning("OrderManager instance or allUnlockableRecipesPool not set. Cannot unlock recipe.");
+				else Debug.LogWarning($"OrderManager.Instance or allUnlockableRecipesPool not set while trying to unlock recipe: {reward.rewardValue}");
 				break;
 		}
+		ShowAutoClosingRewardNotification(notificationMessage);
 	}
 
-	private void DisplayCatFact(string fact)
+	private void ShowAutoClosingRewardNotification(string message)
 	{
-		catFactText.text = fact;
-		catFactPanel.SetActive(true);
-		StartCoroutine(HideCatFactPanelAfterDelay(catFactDisplayDuration));
+		if (rewardNotificationPanel == null || autoRewardNotificationText == null) return;
+		if (activeNotificationCoroutine != null) StopCoroutine(activeNotificationCoroutine);
+		autoRewardNotificationText.text = message;
+		rewardNotificationPanel.SetActive(true);
+		activeNotificationCoroutine = StartCoroutine(HideRewardNotificationAfterDelay());
 	}
 
-	private IEnumerator HideCatFactPanelAfterDelay(float delay)
+	private IEnumerator HideRewardNotificationAfterDelay()
 	{
-		yield return new WaitForSeconds(delay);
-		if (catFactPanel != null) catFactPanel.SetActive(false);
+		yield return new WaitForSeconds(notificationDisplayDuration);
+		if (rewardNotificationPanel != null) rewardNotificationPanel.SetActive(false);
+		activeNotificationCoroutine = null;
 	}
 
-	[ContextMenu("Reset All Reward Progress (PlayerPrefs)")]
-	public void ResetAllRewardProgress()
+	private bool IsMilestoneAwardedPlayerPrefs(MilestoneReward reward)
 	{
-		PlayerPrefs.DeleteKey(TotalDishesCompletedKey);
+		if (reward == null || string.IsNullOrEmpty(reward.milestoneName)) return true;
+		return PlayerPrefs.GetInt(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"), 0) == 1;
+	}
+
+	private void MarkMilestoneAsAwardedPlayerPrefs(MilestoneReward reward)
+	{
+		if (reward == null || string.IsNullOrEmpty(reward.milestoneName)) return;
+		PlayerPrefs.SetInt(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"), 1);
+		PlayerPrefs.Save();
+	}
+
+	[ContextMenu("Reset Milestone Award Status (PlayerPrefs)")]
+	public void ResetMilestoneAwardStatusPlayerPrefs()
+	{
+		if (milestoneRewards == null) return;
 		foreach (MilestoneReward reward in milestoneRewards)
 		{
-			PlayerPrefs.DeleteKey(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"));
+			if (reward != null && !string.IsNullOrEmpty(reward.milestoneName))
+			{
+				PlayerPrefs.DeleteKey(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"));
+			}
 		}
 		PlayerPrefs.Save();
-		LoadProgress(); // Reload to reflect changes in the editor state
-		Debug.Log("All reward progress (PlayerPrefs) has been reset. Restart game to see full effect if music was already added to list.");
+		Debug.Log("PlayerPrefs for individual milestone awarded status has been reset.");
 	}
 }

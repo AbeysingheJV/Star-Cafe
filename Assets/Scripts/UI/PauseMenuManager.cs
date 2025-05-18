@@ -9,17 +9,13 @@ public class PauseMenuManager : MonoBehaviour
 	[Header("UI Panels")]
 	public GameObject pauseMenuPanel;       // Assign your main PauseMenuPanel
 	public GameObject settingsPanel_InGame; // Assign your in-game SettingsPanel
-	public GameObject recipesPanel_InGame;  // Assign your in-game RecipesPanel
+	public GameObject helpPanel_InGame;     // Assign your in-game HelpPanel (NEW)
 
 	[Header("Main Menu Scene")]
 	public string mainMenuSceneName = "MainMenu_SimpleScene"; // Or your main menu scene name
 
 	public static bool isGamePaused = false;
 
-	// Reference to PlayerInputHandler if pause is handled there
-	// public PlayerInputHandler playerInputHandler; // Assign if needed
-
-	// Or, handle pause input directly in this script
 	[Header("Input (Optional - if handling directly)")]
 	public KeyCode pauseKey = KeyCode.Escape; // For old Input Manager
 											  // public InputActionReference pauseInputAction; // For new Input System
@@ -36,21 +32,18 @@ public class PauseMenuManager : MonoBehaviour
 		// Ensure panels are correctly set at start
 		if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
 		if (settingsPanel_InGame != null) settingsPanel_InGame.SetActive(false);
-		if (recipesPanel_InGame != null) recipesPanel_InGame.SetActive(false);
-		isGamePaused = false; // Ensure game starts unpaused
-		Time.timeScale = 1f; // Ensure time scale is normal at start
+		if (helpPanel_InGame != null) helpPanel_InGame.SetActive(false); // NEW
+
+		isGamePaused = false;
+		Time.timeScale = 1f;
 	}
 
 	void Update()
 	{
-		// --- Input Handling for Pause ---
-		// If using old Input Manager:
 		if (Input.GetKeyDown(pauseKey))
 		{
 			TogglePause();
 		}
-
-		// If using new Input System and an InputActionReference:
 		// if (pauseInputAction != null && pauseInputAction.action.WasPressedThisFrame())
 		// {
 		//    TogglePause();
@@ -72,14 +65,13 @@ public class PauseMenuManager : MonoBehaviour
 	public void ResumeGame()
 	{
 		if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
-		if (settingsPanel_InGame != null) settingsPanel_InGame.SetActive(false); // Ensure sub-panels are also hidden
-		if (recipesPanel_InGame != null) recipesPanel_InGame.SetActive(false);
+		if (settingsPanel_InGame != null) settingsPanel_InGame.SetActive(false);
+		if (helpPanel_InGame != null) helpPanel_InGame.SetActive(false); // NEW
 
-		Time.timeScale = 1f; // Resume game time
+		Time.timeScale = 1f;
 		isGamePaused = false;
 		Debug.Log("Game Resumed");
 
-		// Optional: Lock cursor again for gameplay
 		Cursor.lockState = CursorLockMode.Locked;
 		Cursor.visible = false;
 	}
@@ -87,11 +79,14 @@ public class PauseMenuManager : MonoBehaviour
 	void PauseGame()
 	{
 		if (pauseMenuPanel != null) pauseMenuPanel.SetActive(true);
-		Time.timeScale = 0f; // Pause game time
+		// Ensure sub-panels are initially hidden when main pause panel appears
+		if (settingsPanel_InGame != null) settingsPanel_InGame.SetActive(false);
+		if (helpPanel_InGame != null) helpPanel_InGame.SetActive(false);
+
+		Time.timeScale = 0f;
 		isGamePaused = true;
 		Debug.Log("Game Paused");
 
-		// Optional: Unlock cursor for menu navigation
 		Cursor.lockState = CursorLockMode.None;
 		Cursor.visible = true;
 	}
@@ -102,35 +97,54 @@ public class PauseMenuManager : MonoBehaviour
 		Debug.Log("In-Game Settings button pressed.");
 		if (settingsPanel_InGame != null) settingsPanel_InGame.SetActive(true);
 		// Optionally hide the main pause buttons if settings is a full overlay
-		// if (pauseMenuPanel.transform.Find("PauseButtonContainer") != null)
-		//    pauseMenuPanel.transform.Find("PauseButtonContainer").gameObject.SetActive(false);
+		// HideMainPauseButtons(); 
 	}
 
 	public void CloseSettings_InGame()
 	{
 		Debug.Log("Closing In-Game Settings panel.");
 		if (settingsPanel_InGame != null) settingsPanel_InGame.SetActive(false);
-		// if (pauseMenuPanel.transform.Find("PauseButtonContainer") != null)
-		//    pauseMenuPanel.transform.Find("PauseButtonContainer").gameObject.SetActive(true);
+		// ShowMainPauseButtons();
 	}
 
-	public void OpenRecipes_InGame()
+	public void OpenHelp_InGame() // NEW
 	{
-		Debug.Log("In-Game Recipes button pressed.");
-		if (recipesPanel_InGame != null) recipesPanel_InGame.SetActive(true);
+		Debug.Log("In-Game Help button pressed.");
+		if (helpPanel_InGame != null) helpPanel_InGame.SetActive(true);
+		// HideMainPauseButtons();
 	}
 
-	public void CloseRecipes_InGame()
+	public void CloseHelp_InGame() // NEW
 	{
-		Debug.Log("Closing In-Game Recipes panel.");
-		if (recipesPanel_InGame != null) recipesPanel_InGame.SetActive(false);
+		Debug.Log("Closing In-Game Help panel.");
+		if (helpPanel_InGame != null) helpPanel_InGame.SetActive(false);
+		// ShowMainPauseButtons();
 	}
 
 	public void ExitToMainMenu()
 	{
 		Debug.Log("Exiting to Main Menu: " + mainMenuSceneName);
-		Time.timeScale = 1f; // IMPORTANT: Reset time scale before leaving the scene
-		isGamePaused = false; // Reset pause state
+		Time.timeScale = 1f;
+		isGamePaused = false;
+		Debug.Log("Exiting to Main Menu: " + mainMenuSceneName);
+		Time.timeScale = 1f;
+		isGamePaused = false;
+
+		// --- SAVE GAME STATE ---
+		if (GameDataManager.Instance != null)
+		{
+			GameDataManager.Instance.SaveCurrentGameState();
+		}
 		SceneManager.LoadScene(mainMenuSceneName);
 	}
+
+	// Optional helper methods if you want to hide/show the main pause buttons when a sub-panel opens
+	// void HideMainPauseButtons() {
+	//     Transform buttonContainer = pauseMenuPanel.transform.Find("PauseButtonContainer");
+	//     if (buttonContainer != null) buttonContainer.gameObject.SetActive(false);
+	// }
+	// void ShowMainPauseButtons() {
+	//     Transform buttonContainer = pauseMenuPanel.transform.Find("PauseButtonContainer");
+	//     if (buttonContainer != null) buttonContainer.gameObject.SetActive(true);
+	// }
 }

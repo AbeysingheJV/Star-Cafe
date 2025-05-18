@@ -28,7 +28,7 @@ TagManager:
   - HeldItem
   - IngredientSources
   - Environment
-  - General_Interactable
+  - TrashBin
   - CatLayer
   - Radio
   - Book

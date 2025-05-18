@@ -2,7 +2,7 @@ using UnityEngine;
 using TMPro; // Required for TextMeshPro UI elements
 
 // Placeholder for a Book script - you'll need to create this if you want books to be readable
-// public class ReadableBook : MonoBehaviour { public void Read() { Debug.Log("Reading book: " + gameObject.name); /* Implement reading UI */ } }
+// public class ReadableBook : MonoBehaviour { public void InteractWithBook() { Debug.Log("Reading book: " + gameObject.name); /* Implement reading UI */ } }
 // Placeholder for RadioInteractable script
 // public class RadioInteractable : MonoBehaviour { public void Interact() { Debug.Log("Interacting with Radio: " + gameObject.name); /* Implement radio logic */ } }
 
@@ -16,11 +16,11 @@ public class PickupController : MonoBehaviour
 
 	[Header("Interaction Parameters")]
 	[SerializeField] private float interactionDistance = 3f;
-	[SerializeField] private LayerMask interactableLayerMask; // Assign ALL interactable layers here (Pickupable, IngredientSources, CatLayer, Radio, Book, Counter1, Counter2)
+	[SerializeField] private LayerMask interactableLayerMask; // Assign ALL interactable layers here
 
 	[Header("UI Interaction Prompts (Assign in Inspector)")]
 	[SerializeField] private TextMeshProUGUI eActionText;
-	// Q Action Text is intentionally removed from UI display based on previous request
+	[SerializeField] private TextMeshProUGUI qActionText;
 
 	[Header("Holding Parameters")]
 	[SerializeField] private float positionLerpSpeed = 15f;
@@ -40,13 +40,14 @@ public class PickupController : MonoBehaviour
 
 	private GameObject lastLookedAtGameObjectForUI = null;
 	private string lastEText = "";
+	private string lastQText = "";
 
 	// Layer integer values
 	private int ingredientSourceLayerValue = -1;
 	private int pickupableLayerValue = -1;
 	private int catLayerValue = -1;
-	private int counter1LayerValue = -1; // Still needed for Q-key ACTION
-	private int counter2LayerValue = -1; // Still needed for Q-key ACTION
+	private int counter1LayerValue = -1; // For Cooking Stations
+	private int counter2LayerValue = -1; // For Appliance Stations
 	private int radioLayerValue = -1;
 	private int bookLayerValue = -1;
 
@@ -70,8 +71,16 @@ public class PickupController : MonoBehaviour
 		}
 
 		if (eActionText == null) Debug.LogWarning("E_Action_Text not assigned in PickupController. E prompts will not appear.", this);
+		if (qActionText == null) Debug.LogWarning("Q_Action_Text not assigned in PickupController. Q prompts will not appear.", this);
+
 
 		if (interactableLayerMask.value == 0) Debug.LogWarning("InteractableLayerMask not set in PickupController. Interactions might not work.", this);
+		else
+		{
+			string layersInMask = "";
+			for (int i = 0; i < 32; i++) { if ((interactableLayerMask.value & (1 << i)) > 0) { layersInMask += LayerMask.LayerToName(i) + " | "; } }
+			Debug.Log($"PickupController: InteractableLayerMask includes: {layersInMask}");
+		}
 
 		// Get integer values for specific layers by name
 		ingredientSourceLayerValue = LayerMask.NameToLayer("IngredientSources");
@@ -82,18 +91,18 @@ public class PickupController : MonoBehaviour
 		radioLayerValue = LayerMask.NameToLayer("Radio");
 		bookLayerValue = LayerMask.NameToLayer("Book");
 
-		// Log errors if layers aren't found
-		if (ingredientSourceLayerValue == -1) Debug.LogError("PickupController: Layer 'IngredientSources' not found.");
+		if (ingredientSourceLayerValue == -1) Debug.LogError("PickupController: Layer 'IngredientSources' not found in Tags and Layers settings.");
 		if (pickupableLayerValue == -1) Debug.LogError("PickupController: Layer 'Pickupable' not found. Pickup/Drop action might fail.");
-		if (catLayerValue == -1) Debug.LogError("PickupController: Layer 'CatLayer' not found.");
-		if (counter1LayerValue == -1) Debug.LogError("PickupController: Layer 'Counter1' not found. Q-key cook action might fail.");
-		if (counter2LayerValue == -1) Debug.LogError("PickupController: Layer 'Counter2' not found. Q-key cook action might fail.");
-		if (radioLayerValue == -1) Debug.LogError("PickupController: Layer 'Radio' not found.");
-		if (bookLayerValue == -1) Debug.LogError("PickupController: Layer 'Book' not found.");
+		if (catLayerValue == -1) Debug.LogError("PickupController: Layer 'CatLayer' not found. Create it and assign the cat to it.");
+		if (counter1LayerValue == -1) Debug.LogError("PickupController: Layer 'Counter1' not found. 'Cooking Station' prompt might not work.");
+		if (counter2LayerValue == -1) Debug.LogError("PickupController: Layer 'Counter2' not found. 'Frying Station' prompt might not work.");
+		if (radioLayerValue == -1) Debug.LogError("PickupController: Layer 'Radio' not found. Create it and assign radio objects to it.");
+		if (bookLayerValue == -1) Debug.LogError("PickupController: Layer 'Book' not found. Create it and assign book objects to it.");
 
 		if (audioSource == null) { Debug.LogWarning("PickupController requires an AudioSource component.", this); }
 
 		if (eActionText != null) eActionText.text = "";
+		if (qActionText != null) qActionText.text = "";
 	}
 
 	void OnEnable()
@@ -103,6 +112,10 @@ public class PickupController : MonoBehaviour
 			inputHandler.OnInteractActionStarted += HandleInteractionInput;
 			inputHandler.OnCookActionStarted += HandleCookActionInput;
 			inputHandler.OnCookActionCanceled += HandleCookActionInputReleased;
+		}
+		else
+		{
+			Debug.LogError("PickupController: InputHandler is NULL in OnEnable, cannot subscribe to events!");
 		}
 	}
 
@@ -134,6 +147,7 @@ public class PickupController : MonoBehaviour
 	{
 		RaycastHit hit;
 		string currentEText = "";
+		string currentQText = "";
 
 		if (Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance, interactableLayerMask))
 		{
@@ -143,69 +157,69 @@ public class PickupController : MonoBehaviour
 			// E Key Interaction Prompts
 			if (hitLayer == pickupableLayerValue)
 			{
-				currentEText = " Pickup/Drop"; // Always show "Pickup/Drop" for items on this layer
+				currentEText = " Pickup/Drop";
 			}
-			else if (currentlyHeldItem == null) // Only show other prompts if not holding anything
+			else if (currentlyHeldItem == null) // Only show other E prompts if not holding anything
 			{
 				if (hitLayer == ingredientSourceLayerValue) { currentEText = " Grab item"; }
 				else if (hitLayer == catLayerValue) { currentEText = " Pet"; }
 				else if (hitLayer == radioLayerValue) { currentEText = " Change Track"; }
 				else if (hitLayer == bookLayerValue) { currentEText = " Read"; }
 			}
-			// If holding an item and not looking at a Pickupable, currentEText remains "" (no E prompt)
 
-			// Q Key Prompts are entirely removed from UI update
+			// Q Key Prompts for Counters
+			if (hitLayer == counter1LayerValue)
+			{
+				CookingStation cs = hit.collider.GetComponent<CookingStation>();
+				if (cs != null && !cs.IsProcessing) { currentQText = " Cooking Station"; }
+			}
+			else if (hitLayer == counter2LayerValue)
+			{
+				ApplianceStation asStation = hit.collider.GetComponent<ApplianceStation>();
+				if (asStation != null && !asStation.IsCooking) { currentQText = " Frying Station"; }
+			}
 		}
 		else
 		{
 			lastLookedAtGameObjectForUI = null;
 		}
 
-		if (eActionText != null && currentEText != lastEText)
-		{
-			eActionText.text = currentEText;
-			lastEText = currentEText;
-		}
+		if (eActionText != null && currentEText != lastEText) { eActionText.text = currentEText; lastEText = currentEText; }
+		if (qActionText != null && currentQText != lastQText) { qActionText.text = currentQText; lastQText = currentQText; }
 	}
 
 	private void HideAllActionTexts()
 	{
 		if (eActionText != null) eActionText.text = "";
+		if (qActionText != null) qActionText.text = "";
 		lastEText = "";
+		lastQText = "";
 		lastLookedAtGameObjectForUI = null;
 	}
 
 	private void HandleInteractionInput() // E key pressed
 	{
-		// Perform a fresh raycast for the action itself to ensure we're acting on the correct object.
-		RaycastHit hit;
+		RaycastHit hit; // Perform a fresh raycast for the action
 		bool hitSomething = Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance, interactableLayerMask);
 
 		if (currentlyHeldItem != null)
 		{
-			DropItem(true); // If holding, E always drops.
+			DropItem(true);
 			return;
 		}
 
-		// Not holding an item, try to interact with what we are looking at.
 		if (hitSomething)
 		{
 			GameObject hitObject = hit.collider.gameObject;
 			int hitLayer = hitObject.layer;
 
-			// Priority 1: Pickupable items (even if on a counter)
 			if (hitLayer == pickupableLayerValue)
 			{
 				Pickupable pickupable = hitObject.GetComponent<Pickupable>();
 				if (pickupable != null && pickupable.Rb != null && !pickupable.Rb.isKinematic)
-				{
-					GrabExistingItem(pickupable, hit.collider);
-					return;
-				}
+				{ GrabExistingItem(pickupable, hit.collider); return; }
 			}
-
-			// Priority 2: Other specific interactions if not a direct pickup
-			if (hitLayer == ingredientSourceLayerValue)
+			else if (hitLayer == ingredientSourceLayerValue)
 			{
 				IngredientSource source = hitObject.GetComponent<IngredientSource>();
 				if (source != null) { TrySpawnFromSource(source); return; }
@@ -222,15 +236,21 @@ public class PickupController : MonoBehaviour
 			}
 			else if (hitLayer == bookLayerValue)
 			{
-				Debug.Log($"Interacted with Book: {hitObject.name}. Implement book reading logic.");
-				// Example: ReadableBook book = hitObject.GetComponent<ReadableBook>();
-				// if (book != null) { book.Read(); }
+				ReadableBook book = hitObject.GetComponent<ReadableBook>();
+				if (book != null)
+				{
+					book.InteractWithBook();
+				}
+				else
+				{
+					Debug.LogWarning($"Interacted with Book: {hitObject.name}, but ReadableBook script not found on it.");
+				}
 				return;
 			}
 		}
 	}
 
-	private void HandleCookActionInput() // Q key pressed - FUNCTIONALITY REMAINS
+	private void HandleCookActionInput() // Q key pressed
 	{
 		if (currentlyHeldItem != null) return;
 
@@ -260,7 +280,7 @@ public class PickupController : MonoBehaviour
 		}
 	}
 
-	private void HandleCookActionInputReleased() // FUNCTIONALITY REMAINS
+	private void HandleCookActionInputReleased()
 	{
 		if (activeCookingStation != null)
 		{
@@ -278,6 +298,7 @@ public class PickupController : MonoBehaviour
 		}
 		return false;
 	}
+
 	private void SpawnAndHoldItem(GameObject itemPrefab)
 	{
 		if (holdPoint == null) { Debug.LogError("HoldPoint is not assigned!"); return; }
@@ -289,7 +310,7 @@ public class PickupController : MonoBehaviour
 		if (heldItemRigidbody == null) { Debug.LogError($"Spawned item {itemPrefab.name} is missing Rigidbody!"); Destroy(newItemGO); currentlyHeldItem = null; return; }
 
 		Collider newItemCollider = newItemGO.GetComponent<Collider>();
-		if (newItemCollider == null) { Debug.LogWarning($"Spawned item {itemPrefab.name} is missing a Collider!"); }
+		// if (newItemCollider == null) { Debug.LogWarning($"Spawned item {itemPrefab.name} is missing a Collider!"); } // Collider isn't strictly necessary for holding logic
 
 		originalGravityState = heldItemRigidbody.useGravity;
 		heldItemRigidbody.useGravity = false;
@@ -299,6 +320,7 @@ public class PickupController : MonoBehaviour
 		if (audioSource != null && pickupSound != null) { audioSource.PlayOneShot(pickupSound); }
 		HideAllActionTexts();
 	}
+
 	private void GrabExistingItem(Pickupable item, Collider itemCollider)
 	{
 		if (item == null) return;
@@ -320,6 +342,7 @@ public class PickupController : MonoBehaviour
 			currentlyHeldItem = null;
 		}
 	}
+
 	private void DropItem(bool playSound)
 	{
 		if (currentlyHeldItem == null || heldItemRigidbody == null) return;
@@ -333,8 +356,8 @@ public class PickupController : MonoBehaviour
 
 		currentlyHeldItem = null;
 		heldItemRigidbody = null;
-		// UI will update in the next CheckForInteractableObjectForUI call
 	}
+
 	private void MoveHeldItemSmoothly()
 	{
 		if (currentlyHeldItem == null || heldItemRigidbody == null || holdPoint == null) return;
