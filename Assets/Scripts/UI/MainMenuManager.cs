@@ -1,33 +1,34 @@
 using UnityEngine;
-using UnityEngine.UI; // Required for Button, Slider
+using UnityEngine.UI;
 using UnityEngine.SceneManagement;
-using TMPro; // Required for TextMeshProUGUI
-using System.Collections.Generic; // Required for List
-using System; // For DateTime
+using TMPro;
+using System.Collections.Generic;
+using System;
 
 public class MainMenuManager : MonoBehaviour
 {
 	[Header("Scene Configuration")]
-	public string mainGameSceneName = "KitchenScene"; // IMPORTANT: Change to your actual game scene name!
+	public string mainGameSceneName = "KitchenScene"; // Name of the main game scene.
 
 	[Header("Main Menu Panels (Assign in Inspector)")]
-	public GameObject mainMenuButtonPanel;
-	public GameObject settingsPanel_MainMenu;
-	public GameObject creditsPanel_MainMenu;
-	public GameObject saveLoadPanel;
+	public GameObject mainMenuButtonPanel; // Panel holding main menu buttons.
+	public GameObject settingsPanel_MainMenu; // Settings panel for the main menu.
+	public GameObject creditsPanel_MainMenu; // Credits panel.
+	public GameObject saveLoadPanel; // Panel for save/load slot selection.
 
 	[Header("Save/Load Slot UI (Assign in Inspector)")]
-	public Button[] saveSlotButtons;
-	public TextMeshProUGUI[] saveSlotInfoTexts;
-	[SerializeField] private TextMeshProUGUI saveLoadPanelTitleText;
+	public Button[] saveSlotButtons; // Array of UI buttons for save slots.
+	public TextMeshProUGUI[] saveSlotInfoTexts; // Array of UI texts for save slot info.
+	[SerializeField] private TextMeshProUGUI saveLoadPanelTitleText; // Title text for save/load panel.
 
 	[Header("Settings Panel UI - Main Menu (Assign in Inspector)")]
-	public Slider masterVolumeSlider_MainMenu;
-	public Slider musicVolumeSlider_MainMenu;
-	public Slider sfxVolumeSlider_MainMenu;
+	public Slider masterVolumeSlider_MainMenu; // Master volume slider in main menu settings.
+	public Slider musicVolumeSlider_MainMenu; // Music volume slider.
+	public Slider sfxVolumeSlider_MainMenu; // SFX volume slider.
 
-	private bool isLoadingGame;
+	private bool isLoadingGame; // Flag to indicate if the current operation is loading a game.
 
+	// Called before the first frame update.
 	void Start()
 	{
 		if (mainMenuButtonPanel != null) mainMenuButtonPanel.SetActive(true);
@@ -45,7 +46,7 @@ public class MainMenuManager : MonoBehaviour
 		}
 	}
 
-	// --- Main Menu Button Actions ---
+	// Called when the "New Game" button is clicked.
 	public void OnNewGameClicked()
 	{
 		Debug.Log("MainMenuManager: OnNewGameClicked() called.");
@@ -53,6 +54,7 @@ public class MainMenuManager : MonoBehaviour
 		ShowSaveLoadPanel("CHOOSE SLOT FOR NEW GAME");
 	}
 
+	// Called when the "Continue" or "Load Game" button is clicked.
 	public void OnContinueClicked()
 	{
 		Debug.Log("MainMenuManager: OnContinueClicked() called.");
@@ -60,6 +62,7 @@ public class MainMenuManager : MonoBehaviour
 		ShowSaveLoadPanel("SELECT SLOT TO LOAD");
 	}
 
+	// Opens the settings panel in the main menu.
 	public void OpenSettings_MainMenu()
 	{
 		Debug.Log("MainMenuManager: Settings button pressed.");
@@ -71,6 +74,7 @@ public class MainMenuManager : MonoBehaviour
 		}
 	}
 
+	// Closes the settings panel in the main menu.
 	public void CloseSettings_MainMenu()
 	{
 		Debug.Log("MainMenuManager: Closing Main Menu Settings panel.");
@@ -78,6 +82,7 @@ public class MainMenuManager : MonoBehaviour
 		if (mainMenuButtonPanel != null) mainMenuButtonPanel.SetActive(true);
 	}
 
+	// Opens the credits panel in the main menu.
 	public void OpenCredits_MainMenu()
 	{
 		Debug.Log("MainMenuManager: Credits button pressed.");
@@ -85,6 +90,7 @@ public class MainMenuManager : MonoBehaviour
 		if (mainMenuButtonPanel != null) mainMenuButtonPanel.SetActive(false);
 	}
 
+	// Closes the credits panel in the main menu.
 	public void CloseCredits_MainMenu()
 	{
 		Debug.Log("MainMenuManager: Closing Main Menu Credits panel.");
@@ -92,6 +98,7 @@ public class MainMenuManager : MonoBehaviour
 		if (mainMenuButtonPanel != null) mainMenuButtonPanel.SetActive(true);
 	}
 
+	// Exits the game application.
 	public void ExitGame()
 	{
 		Debug.Log("MainMenuManager: Exit Game button pressed.");
@@ -101,7 +108,7 @@ public class MainMenuManager : MonoBehaviour
 #endif
 	}
 
-	// --- Save/Load Panel Logic ---
+	// Shows the save/load panel with a given title and populates save slot info.
 	private void ShowSaveLoadPanel(string title)
 	{
 		if (saveLoadPanel == null)
@@ -118,12 +125,14 @@ public class MainMenuManager : MonoBehaviour
 		if (mainMenuButtonPanel != null) mainMenuButtonPanel.SetActive(false);
 	}
 
+	// Closes the save/load panel.
 	public void CloseSaveLoadPanel()
 	{
 		if (saveLoadPanel != null) saveLoadPanel.SetActive(false);
 		if (mainMenuButtonPanel != null) mainMenuButtonPanel.SetActive(true);
 	}
 
+	// Populates the UI for save slots with their current status.
 	private void PopulateSaveSlots()
 	{
 		if (saveSlotButtons == null || saveSlotInfoTexts == null ||
@@ -190,6 +199,7 @@ public class MainMenuManager : MonoBehaviour
 		}
 	}
 
+	// Called when a save slot button is clicked by the player.
 	public void OnSaveSlotClicked(int slotNumber)
 	{
 		Debug.Log($"MainMenuManager: Save Slot {slotNumber + 1} clicked. isLoadingGame: {isLoadingGame}");
@@ -204,7 +214,6 @@ public class MainMenuManager : MonoBehaviour
 		{
 			if (SaveSystem.DoesSaveExist(slotNumber))
 			{
-				// Use PrepareLoadGameFromSlot and pass the scene name
 				bool prepared = GameDataManager.Instance.PrepareLoadGameFromSlot(slotNumber, mainGameSceneName);
 				if (prepared)
 				{
@@ -217,19 +226,18 @@ public class MainMenuManager : MonoBehaviour
 				}
 			}
 		}
-		else // New Game
+		else
 		{
 			if (SaveSystem.DoesSaveExist(slotNumber))
 			{
 				Debug.LogWarning($"MainMenuManager: Slot {slotNumber} contains save data. Overwriting. (Implement confirmation pop-up later)");
 			}
-			// Use PrepareNewGame and pass the scene name
 			GameDataManager.Instance.PrepareNewGame(slotNumber, mainGameSceneName);
 			SceneManager.LoadScene(mainGameSceneName);
 		}
 	}
 
-	// --- Main Menu Settings UI Logic ---
+	// Loads current audio settings to the main menu's settings UI sliders.
 	private void LoadSettingsToMainMenuUI()
 	{
 		if (AudioManager.Instance == null)
@@ -242,6 +250,7 @@ public class MainMenuManager : MonoBehaviour
 		if (sfxVolumeSlider_MainMenu != null) sfxVolumeSlider_MainMenu.value = AudioManager.Instance.SFXVolumeSetting;
 	}
 
+	// Sets up listeners for the volume sliders in the main menu settings.
 	private void SetupMainMenuSliderListeners()
 	{
 		if (AudioManager.Instance == null)

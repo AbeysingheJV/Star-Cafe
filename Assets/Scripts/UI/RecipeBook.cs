@@ -1,22 +1,22 @@
 using UnityEngine;
-using UnityEngine.UI; // Required for UI elements like Image
-using System.Collections.Generic; // Required for List
+using UnityEngine.UI;
+using System.Collections.Generic;
 
 public class RecipeBookUI : MonoBehaviour
 {
 	public static RecipeBookUI Instance { get; private set; }
 
 	[Header("UI Elements (Assign in Inspector)")]
-	[SerializeField] private GameObject recipeBookPanel;
-	[SerializeField] private Image recipeImageDisplay;
-	// Next and Close buttons will be linked via their OnClick() events
+	[SerializeField] private GameObject recipeBookPanel; // The main UI panel for the recipe book.
+	[SerializeField] private Image recipeImageDisplay; // UI Image element to display recipe pages.
 
 	[Header("Recipe Images (Assign in Inspector)")]
-	[SerializeField] private List<Sprite> recipePages; // Assign your recipe image Sprites here
+	[SerializeField] private List<Sprite> recipePages; // List of Sprites, each being a recipe page.
 
-	private int currentPageIndex = 0;
-	private bool isBookOpen = false;
+	private int currentPageIndex = 0; // Index of the currently displayed recipe page.
+	private bool isBookOpen = false; // Is the recipe book currently open?
 
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
@@ -30,9 +30,10 @@ public class RecipeBookUI : MonoBehaviour
 		if (recipeImageDisplay == null) Debug.LogError("RecipeBookUI: RecipeImageDisplay not assigned!");
 		if (recipePages == null || recipePages.Count == 0) Debug.LogWarning("RecipeBookUI: No recipe pages assigned!");
 
-		if (recipeBookPanel != null) recipeBookPanel.SetActive(false); // Ensure it's hidden at start
+		if (recipeBookPanel != null) recipeBookPanel.SetActive(false);
 	}
 
+	// Toggles the recipe book open or closed.
 	public void ToggleRecipeBook()
 	{
 		if (isBookOpen)
@@ -45,23 +46,25 @@ public class RecipeBookUI : MonoBehaviour
 		}
 	}
 
+	// Opens the recipe book UI.
 	public void OpenBook()
 	{
 		if (recipeBookPanel == null) return;
 
 		isBookOpen = true;
 		recipeBookPanel.SetActive(true);
-		currentPageIndex = 0; // Always start from the first page
+		currentPageIndex = 0;
 		DisplayCurrentPage();
 
-		Time.timeScale = 0f; // Pause the game
-		if (PauseMenuManager.Instance != null) PauseMenuManager.isGamePaused = true; // Inform PauseMenuManager
+		Time.timeScale = 0f;
+		if (PauseMenuManager.Instance != null) PauseMenuManager.isGamePaused = true;
 
 		Cursor.lockState = CursorLockMode.None;
 		Cursor.visible = true;
 		Debug.Log("Recipe Book Opened. Game Paused.");
 	}
 
+	// Closes the recipe book UI.
 	public void CloseBook()
 	{
 		if (recipeBookPanel == null) return;
@@ -69,14 +72,15 @@ public class RecipeBookUI : MonoBehaviour
 		isBookOpen = false;
 		recipeBookPanel.SetActive(false);
 
-		Time.timeScale = 1f; // Resume the game
-		if (PauseMenuManager.Instance != null) PauseMenuManager.isGamePaused = false; // Inform PauseMenuManager
+		Time.timeScale = 1f;
+		if (PauseMenuManager.Instance != null) PauseMenuManager.isGamePaused = false;
 
 		Cursor.lockState = CursorLockMode.Locked;
 		Cursor.visible = false;
 		Debug.Log("Recipe Book Closed. Game Resumed.");
 	}
 
+	// Displays the next page in the recipe book.
 	public void ShowNextPage()
 	{
 		if (recipePages == null || recipePages.Count == 0) return;
@@ -84,13 +88,12 @@ public class RecipeBookUI : MonoBehaviour
 		currentPageIndex++;
 		if (currentPageIndex >= recipePages.Count)
 		{
-			currentPageIndex = 0; // Loop back to the first page
+			currentPageIndex = 0;
 		}
 		DisplayCurrentPage();
 	}
 
-	// ShowPreviousPage() could be added similarly if you add a "Previous" button
-
+	// Updates the recipe image display with the current page.
 	private void DisplayCurrentPage()
 	{
 		if (recipeImageDisplay != null && recipePages != null && recipePages.Count > 0 &&
@@ -99,17 +102,17 @@ public class RecipeBookUI : MonoBehaviour
 			if (recipePages[currentPageIndex] != null)
 			{
 				recipeImageDisplay.sprite = recipePages[currentPageIndex];
-				recipeImageDisplay.gameObject.SetActive(true); // Ensure image component is active
+				recipeImageDisplay.gameObject.SetActive(true);
 			}
 			else
 			{
-				recipeImageDisplay.gameObject.SetActive(false); // Hide if sprite is null
+				recipeImageDisplay.gameObject.SetActive(false);
 				Debug.LogWarning($"RecipeBookUI: Sprite at index {currentPageIndex} is null.");
 			}
 		}
 		else if (recipeImageDisplay != null)
 		{
-			recipeImageDisplay.gameObject.SetActive(false); // Hide if no pages or index out of bounds
+			recipeImageDisplay.gameObject.SetActive(false);
 		}
 	}
 }

@@ -1,32 +1,32 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq; // For Linq operations like Contains
+using System.Linq;
 using TMPro;
 
 public class OrderManager : MonoBehaviour
 {
 	public static OrderManager Instance { get; private set; }
 
-	// Make this public so GameDataManager can access it for new game setup
 	[Header("Order Settings")]
-	public List<RecipeData> initialPossibleOrders; // Recipes available at the start of a brand new game
-	[SerializeField] private bool randomOrder = true;
+	public List<RecipeData> initialPossibleOrders; // Recipes available at the very start of a new game.
+	[SerializeField] private bool randomOrder = true; // Whether to pick orders randomly or sequentially.
 
 	[Header("UI")]
-	[SerializeField] private TextMeshProUGUI currentOrderText;
+	[SerializeField] private TextMeshProUGUI currentOrderText; // UI element to display the current order.
 
 	[Header("Audio")]
-	[SerializeField] private AudioClip newOrderSound;
-	[SerializeField] private AudioClip orderCompleteSound;
+	[SerializeField] private AudioClip newOrderSound; // Sound when a new order appears.
+	[SerializeField] private AudioClip orderCompleteSound; // Sound when an order is completed.
 
 	[Header("State (Read Only)")]
-	[SerializeField] private RecipeData currentOrder;
-	private int currentSequentialIndex = -1;
-	private bool noMoreOrdersAvailable = false;
+	[SerializeField] private RecipeData currentOrder; // The recipe the player currently needs to make.
 
-	private AudioSource audioSource;
-	private List<RecipeData> activeOrderPool = new List<RecipeData>();
+	private int currentSequentialIndex = -1; // Index for sequential order picking.
+	private bool noMoreOrdersAvailable = false; // Flag if no recipes are left to order.
+	private AudioSource audioSource; // Component to play audio clips.
+	private List<RecipeData> activeOrderPool = new List<RecipeData>(); // Current list of recipes that can be ordered.
 
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
@@ -40,6 +40,7 @@ public class OrderManager : MonoBehaviour
 		if (audioSource == null) { Debug.LogWarning("OrderManager requires an AudioSource component for sounds!", this); }
 	}
 
+	// Called before the first frame update, after all Awake functions.
 	void Start()
 	{
 		if (currentOrderText == null)
@@ -47,16 +48,11 @@ public class OrderManager : MonoBehaviour
 			Debug.LogError("OrderManager: Current Order Text UI not assigned!");
 		}
 
-		// GameDataManager should call ApplyUnlockedRecipesFromLoad.
-		// This Start() logic is a fallback if GameDataManager hasn't initialized the pool yet
-		// (e.g., if running this scene directly in editor without the main menu flow).
 		if (activeOrderPool.Count == 0)
 		{
 			if (initialPossibleOrders != null && initialPossibleOrders.Count > 0)
 			{
 				Debug.LogWarning("OrderManager: Active order pool empty at Start. Populating with initialPossibleOrders. GameDataManager should ideally manage this for new/loaded games.");
-				// Convert RecipeData list to list of names for ApplyUnlockedRecipesFromLoad
-				// This ensures consistency with how loaded save data is handled.
 				List<string> initialRecipeNames = new List<string>();
 				foreach (RecipeData recipe in initialPossibleOrders)
 				{
@@ -65,28 +61,23 @@ public class OrderManager : MonoBehaviour
 						initialRecipeNames.Add(recipe.name);
 					}
 				}
-				// Call ApplyUnlockedRecipesFromLoad to process these initial names
-				// This will use RewardManager's pool to get the actual RecipeData objects.
 				ApplyUnlockedRecipesFromLoad(initialRecipeNames);
 			}
 			else
 			{
 				Debug.LogWarning("OrderManager: No recipes available at Start (initial list also empty or null).");
-				UpdateOrderUI(); // To show "No Orders Available"
+				UpdateOrderUI();
 			}
 		}
-		// If activeOrderPool was populated by GDM's ApplyUnlockedRecipesFromLoad, 
-		// GetNextOrder would have been called from there.
 	}
 
-	// Called by GameDataManager when loading a save or starting a new game
+	// Updates the active pool of orderable recipes based on loaded save data.
 	public void ApplyUnlockedRecipesFromLoad(List<string> unlockedRecipeNames)
 	{
 		activeOrderPool.Clear();
 		bool appliedAnyFromSave = false;
 		bool appliedAnyFromInitial = false;
 
-		// Attempt to populate from unlockedRecipeNames first (from save data)
 		if (unlockedRecipeNames != null && unlockedRecipeNames.Count > 0)
 		{
 			if (RewardManager.Instance != null && RewardManager.Instance.allUnlockableRecipesPool != null)
@@ -94,7 +85,6 @@ public class OrderManager : MonoBehaviour
 				foreach (string recipeName in unlockedRecipeNames)
 				{
 					if (string.IsNullOrEmpty(recipeName)) continue;
-					// Find the RecipeData asset from RewardManager's master list
 					RecipeData recipe = RewardManager.Instance.allUnlockableRecipesPool.Find(r => r != null && r.name == recipeName);
 					if (recipe != null)
 					{
@@ -114,12 +104,9 @@ public class OrderManager : MonoBehaviour
 			else
 			{
 				Debug.LogError("OrderManager: RewardManager.Instance or its allUnlockableRecipesPool is not available to resolve recipe names from save data. Initial recipes might not be used if save data had names.");
-				// Critical issue if this happens and unlockedRecipeNames was not empty.
 			}
 		}
 
-		// If the pool is still empty (e.g., new game where unlockedRecipeNames was empty, or saved recipes couldn't be found)
-		// OR if unlockedRecipeNames was null/empty to begin with, then use initialPossibleOrders.
 		if (activeOrderPool.Count == 0 && initialPossibleOrders != null && initialPossibleOrders.Count > 0)
 		{
 			Debug.Log("OrderManager: Active pool empty after processing saved names (or no saved names given), using initialPossibleOrders.");
@@ -148,14 +135,13 @@ public class OrderManager : MonoBehaviour
 		}
 	}
 
-
-	void GetNextOrder()
+	// Selects and sets the next customer order.
+	private void GetNextOrder()
 	{
 		if (activeOrderPool.Count == 0)
 		{
 			noMoreOrdersAvailable = true;
 			currentOrder = null;
-			// Debug.Log("OrderManager: No recipes in active pool to choose from."); // Can be noisy
 			UpdateOrderUI();
 			return;
 		}
@@ -172,26 +158,24 @@ public class OrderManager : MonoBehaviour
 				{
 					currentOrder = activeOrderPool[Random.Range(0, activeOrderPool.Count)];
 					attempts++;
-				} while (currentOrder == previousOrder && attempts < activeOrderPool.Count * 2); // Avoid infinite loop if all remaining orders are the same
+				} while (currentOrder == previousOrder && attempts < activeOrderPool.Count * 2);
 			}
-			else if (activeOrderPool.Count > 0) // Ensure there's at least one to pick
+			else if (activeOrderPool.Count > 0)
 			{
 				currentOrder = activeOrderPool[Random.Range(0, activeOrderPool.Count)];
 			}
-			// else: activeOrderPool.Count is 0, caught by the initial check
 		}
-		else // Sequential 
+		else
 		{
-			if (activeOrderPool.Count > 0) // Ensure there's at least one to pick
+			if (activeOrderPool.Count > 0)
 			{
 				currentSequentialIndex++;
 				if (currentSequentialIndex >= activeOrderPool.Count)
 				{
-					currentSequentialIndex = 0; // Loop
+					currentSequentialIndex = 0;
 				}
 				currentOrder = activeOrderPool[currentSequentialIndex];
 			}
-			// else: activeOrderPool.Count is 0, caught by the initial check
 		}
 
 		UpdateOrderUI();
@@ -202,7 +186,8 @@ public class OrderManager : MonoBehaviour
 		}
 	}
 
-	void UpdateOrderUI()
+	// Updates the UI text to display the current order.
+	private void UpdateOrderUI()
 	{
 		if (currentOrderText != null)
 		{
@@ -210,45 +195,45 @@ public class OrderManager : MonoBehaviour
 			{
 				currentOrderText.text = $"Order: {currentOrder.recipeName}";
 			}
-			else // Handles noMoreOrdersAvailable or empty activeOrderPool
+			else
 			{
 				currentOrderText.text = "No Orders Available";
 			}
 		}
 	}
 
+	// Checks if the submitted dish matches the current order.
 	public bool CheckOrderCompletion(GameObject submittedDish)
 	{
 		if (currentOrder == null || submittedDish == null) return false;
 		return !string.IsNullOrEmpty(currentOrder.resultDishTag) && submittedDish.CompareTag(currentOrder.resultDishTag);
 	}
 
+	// Called when an order is successfully completed.
 	public void OrderCompleted()
 	{
-		if (currentOrder == null) return; // Should not happen if CheckOrderCompletion was true
+		if (currentOrder == null) return;
 		Debug.Log($"Order '{currentOrder.recipeName}' Completed!");
 
 		if (audioSource != null && orderCompleteSound != null) audioSource.PlayOneShot(orderCompleteSound);
 
-		// Notify RewardManager (which then notifies GameDataManager)
 		if (RewardManager.Instance != null)
 		{
 			RewardManager.Instance.IncrementDishesCompleted();
 		}
 
-		if (CatAI.Instance != null) CatAI.Instance.TriggerMiauAndSound(); // If you have a cat
+		if (CatAI.Instance != null) CatAI.Instance.TriggerMiauAndSound();
 		GetNextOrder();
 	}
 
-	// Called by RewardManager (which is called by GameDataManager) to add a newly unlocked recipe
-	// to the current session's active pool.
+	// Adds a newly unlocked recipe to the active pool of orderable recipes.
 	public void UnlockNewRecipe(RecipeData newRecipe)
 	{
 		if (newRecipe != null && !activeOrderPool.Contains(newRecipe))
 		{
 			activeOrderPool.Add(newRecipe);
 			Debug.Log($"OrderManager: New recipe '{newRecipe.recipeName}' added to active order pool for current session.");
-			if (currentOrder == null || noMoreOrdersAvailable) // If we were out of orders, try to get a new one
+			if (currentOrder == null || noMoreOrdersAvailable)
 			{
 				GetNextOrder();
 			}

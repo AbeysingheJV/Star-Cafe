@@ -3,36 +3,41 @@ using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Linq;
 
+// Requires a Collider component to be attached.
 [RequireComponent(typeof(Collider))]
 public class CookingStation : MonoBehaviour
 {
 	[Header("Setup")]
-	[SerializeField] private List<RecipeData> availableRecipes;
-	[SerializeField] private Transform resultSpawnPoint;
-	[SerializeField] private Slider progressBar;
-	[SerializeField] private string specificProcessActionName = "Prepare Food"; // Customizable action name
+	[SerializeField] private List<RecipeData> availableRecipes; // Recipes this station can prepare.
+	[SerializeField] private Transform resultSpawnPoint; // Where the prepared dish appears.
+	[SerializeField] private Slider progressBar; // UI slider for processing progress.
+	[SerializeField] private string specificProcessActionName = "Prepare Food"; // Action name for UI (e.g., "Chop").
 
 	[Header("VFX")]
-	[SerializeField] private ParticleSystem stationProcessingVFXPrefab;
-	[SerializeField] private ParticleSystem playerHoldActionVFXPrefab;
+	[SerializeField] private ParticleSystem stationProcessingVFXPrefab; // VFX when station is processing.
+	[SerializeField] private ParticleSystem playerHoldActionVFXPrefab; // VFX when player holds action key.
 
 	[Header("Audio")]
-	[SerializeField] private AudioClip processStartSound;
-	[SerializeField] private AudioClip processingLoopSound;
-	[SerializeField] private AudioClip processCompleteSound;
+	[SerializeField] private AudioClip processStartSound; // Sound when processing starts.
+	[SerializeField] private AudioClip processingLoopSound; // Looping sound during processing.
+	[SerializeField] private AudioClip processCompleteSound; // Sound when processing finishes.
 
 	[Header("State (Read Only)")]
-	[SerializeField] private List<Pickupable> ingredientsOnStation = new List<Pickupable>();
+	[SerializeField] private List<Pickupable> ingredientsOnStation = new List<Pickupable>(); // Ingredients currently on station.
 
-	private bool isProcessing = false;
-	private float currentProcessTimer = 0f;
-	private RecipeData currentRecipe = null;
-	private Collider triggerCollider;
-	private AudioSource audioSource;
+	private bool isProcessing = false; // Is the station currently processing ingredients?
+	private float currentProcessTimer = 0f; // Timer for the current processing.
+	private RecipeData currentRecipe = null; // The recipe currently being processed.
+	private Collider triggerCollider; // The station's trigger collider.
+	private AudioSource audioSource; // Component for playing sounds.
 
-	private ParticleSystem currentStationProcessingVFXInstance = null;
-	private ParticleSystem currentPlayerHoldActionVFXInstance = null;
+	private ParticleSystem currentStationProcessingVFXInstance = null; // Instance of station's processing VFX.
+	private ParticleSystem currentPlayerHoldActionVFXInstance = null; // Instance of player's hold action VFX.
 
+	// Public property to check if the station is currently processing.
+	public bool IsProcessing => isProcessing;
+
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		triggerCollider = GetComponent<Collider>();
@@ -46,12 +51,14 @@ public class CookingStation : MonoBehaviour
 		if (playerHoldActionVFXPrefab == null) { Debug.LogWarning($"CookingStation on {gameObject.name} is missing its Player Hold Action VFX Prefab assignment (starburst)!", this); }
 	}
 
+	// Called every frame.
 	void Update()
 	{
 		if (isProcessing) UpdateHoldToProcess(Time.deltaTime);
 		if (progressBar != null && progressBar.gameObject.activeSelf) UpdateProgressBarTransform();
 	}
 
+	// Called when the GameObject is being destroyed.
 	void OnDestroy()
 	{
 		if (currentStationProcessingVFXInstance != null) Destroy(currentStationProcessingVFXInstance.gameObject);
@@ -59,6 +66,7 @@ public class CookingStation : MonoBehaviour
 		if (audioSource != null && audioSource.isPlaying && audioSource.loop) audioSource.Stop();
 	}
 
+	// Called when another Collider enters this GameObject's trigger.
 	void OnTriggerEnter(Collider other)
 	{
 		Pickupable p = other.GetComponent<Pickupable>();
@@ -68,21 +76,19 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
+	// Called when another Collider exits this GameObject's trigger.
 	void OnTriggerExit(Collider other)
 	{
 		Pickupable p = other.GetComponent<Pickupable>();
 		if (p != null && ingredientsOnStation.Contains(p)) ingredientsOnStation.Remove(p);
 	}
 
-	// Public property for PickupController to check status
-	public bool IsProcessing => isProcessing;
-
-	// Method for PickupController to get interaction info (primarily its boolean return value now)
+	// Determines if the player can interact and provides an action name.
 	public virtual bool GetCookActionInfo(out string actionName)
 	{
 		if (isProcessing)
 		{
-			actionName = ""; // No prompt text if busy (PickupController handles this via IsProcessing check)
+			actionName = "";
 			return false;
 		}
 
@@ -94,13 +100,14 @@ public class CookingStation : MonoBehaviour
 
 		if (recipe != null)
 		{
-			actionName = specificProcessActionName; // Still set it, though PickupController might override UI text
+			actionName = specificProcessActionName;
 			return true;
 		}
 		actionName = "";
 		return false;
 	}
 
+	// Starts the hold-to-cook process if a valid recipe is matched.
 	public bool StartHoldToCook()
 	{
 		if (isProcessing)
@@ -134,6 +141,7 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
+	// Cancels the hold-to-cook process (e.g., if player releases key).
 	public void CancelHoldToCook()
 	{
 		bool wasProcessing = isProcessing;
@@ -157,6 +165,7 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
+	// Plays the VFX associated with the player holding an action at this station.
 	private void PlayPlayerHoldActionVFX()
 	{
 		if (playerHoldActionVFXPrefab != null)
@@ -171,6 +180,7 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
+	// Stops the player's hold action VFX.
 	private void StopPlayerHoldActionVFX()
 	{
 		if (currentPlayerHoldActionVFXInstance != null)
@@ -182,6 +192,7 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
+	// Plays the VFX on the station itself during processing.
 	private void PlayStationProcessingVFX()
 	{
 		if (stationProcessingVFXPrefab != null)
@@ -193,6 +204,7 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
+	// Stops the station's processing VFX.
 	private void StopStationProcessingVFX()
 	{
 		if (currentStationProcessingVFXInstance != null)
@@ -203,6 +215,7 @@ public class CookingStation : MonoBehaviour
 		}
 	}
 
+	// Updates the processing timer and progress bar while player holds action key.
 	private void UpdateHoldToProcess(float deltaTime)
 	{
 		if (!isProcessing || currentRecipe == null) return;
@@ -211,6 +224,7 @@ public class CookingStation : MonoBehaviour
 		if (currentProcessTimer >= currentRecipe.cookingDuration) CompleteProcessing();
 	}
 
+	// Finalizes the processing: spawns result, cleans up ingredients and state.
 	private void CompleteProcessing()
 	{
 		if (!isProcessing || currentRecipe == null) return;
@@ -232,6 +246,7 @@ public class CookingStation : MonoBehaviour
 		currentProcessTimer = 0f;
 	}
 
+	// Finds a matching recipe from available recipes based on current ingredients.
 	protected virtual RecipeData FindMatchingRecipe(List<IngredientData> currentIngredients)
 	{
 		if (currentIngredients == null || currentIngredients.Count == 0) return null;
@@ -242,6 +257,7 @@ public class CookingStation : MonoBehaviour
 		return null;
 	}
 
+	// Checks if the current ingredients exactly match the required ingredients for a recipe.
 	private bool DoIngredientsMatch(List<IngredientData> required, List<IngredientData> current)
 	{
 		if (required == null || current == null || required.Count != current.Count || required.Count == 0) return false;
@@ -252,7 +268,8 @@ public class CookingStation : MonoBehaviour
 		return true;
 	}
 
-	void UpdateProgressBarTransform()
+	// Updates the progress bar's transform to always face the camera (for world-space UI).
+	private void UpdateProgressBarTransform()
 	{
 		if (progressBar == null) return;
 		Canvas canvas = progressBar.GetComponentInParent<Canvas>();

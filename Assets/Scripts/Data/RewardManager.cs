@@ -1,9 +1,10 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq; // Added for .Select in debug log
 using TMPro;
 
-// Define RewardType enum here so it's accessible
+// Defines the types of rewards available.
 public enum RewardType
 {
 	CatFact,
@@ -11,14 +12,14 @@ public enum RewardType
 	NewRecipeUnlock
 }
 
-// Define MilestoneReward class here so it's accessible
+// Defines the structure for a milestone reward.
 [System.Serializable]
 public class MilestoneReward
 {
-	public string milestoneName = "New Milestone"; // Default name
-	public int dishesRequired = 1;
-	public RewardType rewardType = RewardType.CatFact;
-	public string rewardValue = ""; // For CatFact: The fact itself. For Music/Recipe: Asset name.
+	public string milestoneName = "New Milestone"; // Name of the milestone.
+	public int dishesRequired = 1; // Number of dishes needed to achieve this milestone.
+	public RewardType rewardType = RewardType.CatFact; // Type of reward for this milestone.
+	public string rewardValue = ""; // Value of the reward (e.g., cat fact text, asset name for music/recipe).
 }
 
 public class RewardManager : MonoBehaviour
@@ -26,25 +27,21 @@ public class RewardManager : MonoBehaviour
 	public static RewardManager Instance { get; private set; }
 
 	[Header("Milestone Rewards Configuration")]
-	[SerializeField] private List<MilestoneReward> milestoneRewards = new List<MilestoneReward>();
+	[SerializeField] private List<MilestoneReward> milestoneRewards = new List<MilestoneReward>(); // List of all milestone rewards.
 
 	[Header("Reward Notification UI (Assign in Inspector)")]
-	[SerializeField] private GameObject rewardNotificationPanel;
-	[SerializeField] private TextMeshProUGUI autoRewardNotificationText;
-	[SerializeField] private float notificationDisplayDuration = 5f;
+	[SerializeField] private GameObject rewardNotificationPanel; // UI panel for reward notifications.
+	[SerializeField] private TextMeshProUGUI autoRewardNotificationText; // Text element for reward messages.
+	[SerializeField] private float notificationDisplayDuration = 5f; // How long notifications stay on screen.
 
 	[Header("Resource Pools for Unlocks (Assign in Inspector)")]
-	// These are public so other managers (like OrderManager via GameDataManager) can reference them
-	// to resolve asset names to actual assets if needed.
-	public List<RecipeData> allUnlockableRecipesPool;
-	public List<AudioClip> allUnlockableMusicTracksPool;
+	public List<RecipeData> allUnlockableRecipesPool; // Master list of all recipes that can be unlocked.
+	public List<AudioClip> allUnlockableMusicTracksPool; // Master list of all music tracks that can be unlocked.
 
-	// PlayerPrefs key for individual milestone awarded status (tracks if pop-up was shown)
-	private const string MilestoneAwardedKeyPrefix = "MilestoneAwarded_";
-	private Coroutine activeNotificationCoroutine;
+	private const string MilestoneAwardedKeyPrefix = "MilestoneAwarded_"; // Prefix for PlayerPrefs keys.
+	private Coroutine activeNotificationCoroutine; // Stores the active notification coroutine.
 
-	// TotalDishesCompleted is now primarily managed by GameDataManager
-
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
@@ -53,8 +50,6 @@ public class RewardManager : MonoBehaviour
 			return;
 		}
 		Instance = this;
-		// DontDestroyOnLoad(gameObject); // GameDataManager is DDOL. RewardManager can be scene-specific.
-		// If it needs to persist, ensure its references are handled across scenes.
 
 		if (milestoneRewards != null)
 		{
@@ -63,9 +58,8 @@ public class RewardManager : MonoBehaviour
 		else
 		{
 			Debug.LogWarning("RewardManager: MilestoneRewards list is not initialized!");
-			milestoneRewards = new List<MilestoneReward>(); // Initialize to prevent null errors
+			milestoneRewards = new List<MilestoneReward>();
 		}
-
 
 		if (rewardNotificationPanel != null)
 		{
@@ -78,30 +72,26 @@ public class RewardManager : MonoBehaviour
 			Debug.LogWarning("RewardManager: AutoRewardNotificationText not assigned in Inspector.");
 		}
 
-		// Check if pools are assigned, as other scripts might rely on them
 		if (allUnlockableRecipesPool == null)
 		{
 			Debug.LogWarning("RewardManager: allUnlockableRecipesPool is not assigned in Inspector! Recipe unlocking might fail to find assets.");
-			allUnlockableRecipesPool = new List<RecipeData>(); // Initialize to prevent null errors
+			allUnlockableRecipesPool = new List<RecipeData>();
 		}
 		if (allUnlockableMusicTracksPool == null)
 		{
 			Debug.LogWarning("RewardManager: allUnlockableMusicTracksPool is not assigned in Inspector! Music unlocking might fail to find assets.");
-			allUnlockableMusicTracksPool = new List<AudioClip>(); // Initialize
+			allUnlockableMusicTracksPool = new List<AudioClip>();
 		}
 	}
 
-	// Called by GameDataManager when a game is loaded or a new game starts
-	// to set the initial state based on loaded data.
+	// Sets the total dishes completed count when a game is loaded.
 	public void SetTotalDishesCompletedFromLoad(int count)
 	{
 		Debug.Log($"RewardManager: Total dishes count set to {count} from load by GameDataManager.");
-		// Check for any milestones that should have been awarded based on this count
-		// but whose PlayerPrefs flag might have been cleared or not set.
-		CheckForRewards(count, true); // 'true' indicates it's an initial load check (don't re-show popups)
+		CheckForRewards(count, true);
 	}
 
-	// Called by OrderManager when a dish is successfully completed
+	// Called when a dish is completed to update progress and check for rewards.
 	public void IncrementDishesCompleted()
 	{
 		if (GameDataManager.Instance == null)
@@ -109,24 +99,20 @@ public class RewardManager : MonoBehaviour
 			Debug.LogError("RewardManager: GameDataManager.Instance is null. Cannot increment dishes.");
 			return;
 		}
-
-		// GameDataManager holds the authoritative count.
-		// Tell it to increment, then get the new count.
 		GameDataManager.Instance.IncrementDishesAndUpdate();
 		int newTotalDishes = GameDataManager.Instance.TotalDishesCompleted;
 
 		Debug.Log($"RewardManager: Dish completed! New total (from GDM): {newTotalDishes}");
-		CheckForRewards(newTotalDishes, false); // 'false' means it's a new event, show pop-up if applicable
+		CheckForRewards(newTotalDishes, false);
 	}
 
-	// Checks for rewards based on the current dish count
+	// Checks if any milestone rewards have been achieved based on the dish count.
 	private void CheckForRewards(int currentTotalDishes, bool isInitialLoadCheck)
 	{
 		if (milestoneRewards == null) return;
 
 		foreach (MilestoneReward reward in milestoneRewards)
 		{
-			// Basic null check for safety, though list elements should ideally always be valid
 			if (reward == null || string.IsNullOrEmpty(reward.milestoneName))
 			{
 				Debug.LogWarning("RewardManager: Encountered a null or unnamed milestone reward. Skipping.");
@@ -135,43 +121,38 @@ public class RewardManager : MonoBehaviour
 
 			if (currentTotalDishes >= reward.dishesRequired)
 			{
-				if (!IsMilestoneAwardedPlayerPrefs(reward)) // Check if this specific milestone's pop-up was shown
+				if (!IsMilestoneAwardedPlayerPrefs(reward))
 				{
-					if (!isInitialLoadCheck) // Only grant pop-up and logic for new achievements, not on initial load for already passed milestones
+					if (!isInitialLoadCheck)
 					{
 						GrantRewardPopupAndLogic(reward);
 					}
-					MarkMilestoneAsAwardedPlayerPrefs(reward); // Mark this milestone's pop-up as shown
-
-					// GameDataManager should be informed about the actual unlock (recipe/music name)
-					// This is already handled inside GrantRewardPopupAndLogic
+					MarkMilestoneAsAwardedPlayerPrefs(reward);
 				}
 			}
 			else
 			{
-				// Since milestones are sorted by dishesRequired, no need to check further
 				break;
 			}
 		}
 	}
 
-	// Grants the reward (unlocks item, shows pop-up)
+	// Grants the specified reward, updates game data, and triggers UI notifications.
 	private void GrantRewardPopupAndLogic(MilestoneReward reward)
 	{
-		Debug.Log($"RewardManager: Granting reward & POPUP for milestone: '{reward.milestoneName}'. Type: {reward.rewardType}, Value: '{reward.rewardValue}'");
-		string notificationMessage = "New Reward Unlocked!"; // Default
+		Debug.Log($"Attempting to grant reward for milestone: '{reward.milestoneName}'. Type: {reward.rewardType}, Value: '{reward.rewardValue}'");
+		string notificationMessage = "New Reward Unlocked!";
 
 		switch (reward.rewardType)
 		{
 			case RewardType.CatFact:
 				notificationMessage = "New Cat Fact Unlocked!";
-				// Actual cat fact (reward.rewardValue) isn't displayed in this simple pop-up.
-				// GameDataManager could store it if SaveData is expanded:
-				// if (GameDataManager.Instance != null) { GameDataManager.Instance.AddCollectedCatFact(reward.rewardValue); }
+				Debug.Log($"[RewardManager] CatFact: '{reward.rewardValue}'");
 				break;
 
 			case RewardType.MusicTrackUnlock:
 				notificationMessage = "New Music Track Unlocked!";
+				Debug.Log($"[RewardManager] Music unlock: Reward Value is '{reward.rewardValue}'");
 				if (GameDataManager.Instance != null) GameDataManager.Instance.AddUnlockedMusicTrack(reward.rewardValue);
 
 				if (BackgroundMusicPlayer.Instance != null) BackgroundMusicPlayer.Instance.UnlockAndPlayTrackByName(reward.rewardValue);
@@ -180,21 +161,32 @@ public class RewardManager : MonoBehaviour
 
 			case RewardType.NewRecipeUnlock:
 				notificationMessage = "New Recipe Unlocked!";
+				Debug.Log($"[RewardManager] Recipe unlock: Reward Value is '{reward.rewardValue}'");
 				if (GameDataManager.Instance != null) GameDataManager.Instance.AddUnlockedRecipe(reward.rewardValue);
 
 				if (OrderManager.Instance != null && allUnlockableRecipesPool != null)
 				{
+					Debug.Log($"[RewardManager] Searching for recipe '{reward.rewardValue}' in allUnlockableRecipesPool (count: {allUnlockableRecipesPool.Count})");
+					if (allUnlockableRecipesPool.Count > 0)
+					{
+						Debug.Log($"[RewardTest] Searching in allUnlockableRecipesPool. Available names: {string.Join(", ", allUnlockableRecipesPool.Where(r => r != null).Select(r => "'" + r.name + "'"))}");
+					}
+
 					RecipeData recipeToUnlock = allUnlockableRecipesPool.Find(r => r != null && r.name == reward.rewardValue);
-					if (recipeToUnlock != null) OrderManager.Instance.UnlockNewRecipe(recipeToUnlock);
-					else Debug.LogWarning($"Recipe asset named '{reward.rewardValue}' not found in allUnlockableRecipesPool.");
+					if (recipeToUnlock != null)
+					{
+						Debug.Log($"[RewardManager] Found recipe: {recipeToUnlock.name}. Unlocking via OrderManager.");
+						OrderManager.Instance.UnlockNewRecipe(recipeToUnlock);
+					}
+					else Debug.LogWarning($"[RewardManager] Recipe asset named '{reward.rewardValue}' NOT FOUND in allUnlockableRecipesPool.");
 				}
 				else Debug.LogWarning($"OrderManager.Instance or allUnlockableRecipesPool not set/available while trying to unlock recipe: {reward.rewardValue}");
 				break;
 		}
-
 		ShowAutoClosingRewardNotification(notificationMessage);
 	}
 
+	// Shows a reward notification message on the UI.
 	private void ShowAutoClosingRewardNotification(string message)
 	{
 		if (rewardNotificationPanel == null || autoRewardNotificationText == null)
@@ -202,7 +194,7 @@ public class RewardManager : MonoBehaviour
 			Debug.LogError("RewardManager: RewardNotificationPanel or AutoRewardNotificationText is not assigned. Cannot show notification.");
 			return;
 		}
-		if (activeNotificationCoroutine != null) StopCoroutine(activeNotificationCoroutine); // Stop previous one if any
+		if (activeNotificationCoroutine != null) StopCoroutine(activeNotificationCoroutine);
 
 		autoRewardNotificationText.text = message;
 		rewardNotificationPanel.SetActive(true);
@@ -210,11 +202,10 @@ public class RewardManager : MonoBehaviour
 		activeNotificationCoroutine = StartCoroutine(HideRewardNotificationAfterDelay());
 	}
 
+	// Coroutine to hide the reward notification panel after a delay.
 	private IEnumerator HideRewardNotificationAfterDelay()
 	{
-		// Using WaitForSeconds because game time is NOT paused for this notification type
 		yield return new WaitForSeconds(notificationDisplayDuration);
-
 		if (rewardNotificationPanel != null)
 		{
 			rewardNotificationPanel.SetActive(false);
@@ -222,25 +213,26 @@ public class RewardManager : MonoBehaviour
 		activeNotificationCoroutine = null;
 	}
 
-	// --- PlayerPrefs for individual milestone awarded status (tracks if pop-up was shown) ---
+	// Checks PlayerPrefs to see if a milestone has already been awarded.
 	private bool IsMilestoneAwardedPlayerPrefs(MilestoneReward reward)
 	{
-		// Added null check for reward itself
 		if (reward == null || string.IsNullOrEmpty(reward.milestoneName))
 		{
 			Debug.LogWarning("IsMilestoneAwardedPlayerPrefs called with null or unnamed reward.");
-			return true; // Treat as awarded to prevent errors
+			return true;
 		}
 		return PlayerPrefs.GetInt(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"), 0) == 1;
 	}
 
+	// Marks a milestone as awarded in PlayerPrefs.
 	private void MarkMilestoneAsAwardedPlayerPrefs(MilestoneReward reward)
 	{
 		if (reward == null || string.IsNullOrEmpty(reward.milestoneName)) return;
 		PlayerPrefs.SetInt(MilestoneAwardedKeyPrefix + reward.milestoneName.Replace(" ", "_"), 1);
-		PlayerPrefs.Save(); // Save PlayerPrefs immediately after marking
+		PlayerPrefs.Save();
 	}
 
+	// Editor-only function to reset all milestone awarded statuses in PlayerPrefs.
 	[ContextMenu("Reset Milestone Award Status (PlayerPrefs)")]
 	public void ResetMilestoneAwardStatusPlayerPrefs()
 	{

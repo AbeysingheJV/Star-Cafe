@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq; // Required for Linq operations like Find and Contains
+using System.Linq;
 
 public class BackgroundMusicPlayer : MonoBehaviour
 {
@@ -10,22 +10,17 @@ public class BackgroundMusicPlayer : MonoBehaviour
 	[SerializeField] private AudioSource audioSource;
 
 	[Header("Music Tracks")]
-	// This list is for tracks available from the very start of a brand new game,
-	// before any save data is processed or any rewards are unlocked.
-	// GameDataManager will also add these to the SaveData for a new game.
 	public List<AudioClip> initialMusicTracks;
-
-	// This list must contain ALL AudioClip assets that can EVER be unlocked as rewards.
-	// GameDataManager loads track *names* from save data, and this list is used to find the actual AudioClips.
 	[SerializeField] private List<AudioClip> allPossibleUnlockableTracks;
 
 	[Header("Settings")]
 	[SerializeField] private bool playOnStart = true;
-	[SerializeField] private int startTrackIndexInInitial = 0; // Index within initialMusicTracks for a new game
+	[SerializeField] private int startTrackIndexInInitial = 0;
 
 	private List<AudioClip> currentlyPlayableTracks = new List<AudioClip>();
 	private int currentPlayableTrackIndex = -1;
 
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
@@ -34,39 +29,33 @@ public class BackgroundMusicPlayer : MonoBehaviour
 			return;
 		}
 		Instance = this;
-		DontDestroyOnLoad(gameObject); // This manager should persist across scenes
+		DontDestroyOnLoad(gameObject);
 
 		if (audioSource == null) audioSource = GetComponent<AudioSource>();
 		if (audioSource == null)
 		{
 			Debug.LogError("BackgroundMusicPlayer: AudioSource component not found! Music will not play.");
-			enabled = false; // Disable script if no AudioSource
+			enabled = false;
 			return;
 		}
-
-		// Initialize with only the initial tracks.
-		// GameDataManager will call ApplyUnlockedMusicFromLoad to add more from save data.
 		InitializeWithInitialTracksOnly();
 	}
 
+	// Called before the first frame update, after all Awake functions.
 	void Start()
 	{
 		audioSource.loop = true;
 		audioSource.playOnAwake = false;
 
-		// Attempt to play a track if playOnStart is true and tracks are available.
-		// This might play an initial track, which could then be changed by ApplyUnlockedMusicFromLoad
-		// if a different track was saved as "last played" (though we don't save last played track index currently).
 		if (playOnStart && currentlyPlayableTracks.Count > 0)
 		{
 			int playIndex = startTrackIndexInInitial;
-			// Ensure playIndex is valid for the current state of currentlyPlayableTracks
 			if (playIndex < 0 || playIndex >= currentlyPlayableTracks.Count)
 			{
-				playIndex = 0; // Default to first track if index is bad
+				playIndex = 0;
 			}
 
-			if (currentlyPlayableTracks.Count > 0) // Check again after potential adjustment
+			if (currentlyPlayableTracks.Count > 0)
 			{
 				PlayTrackByIndex(playIndex);
 			}
@@ -77,6 +66,7 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		}
 	}
 
+	// Sets up the initial list of playable tracks from the 'initialMusicTracks' list.
 	private void InitializeWithInitialTracksOnly()
 	{
 		currentlyPlayableTracks.Clear();
@@ -93,10 +83,9 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		Debug.Log($"BackgroundMusicPlayer: Initialized with {currentlyPlayableTracks.Count} initial tracks in playable list.");
 	}
 
-	// Called by GameDataManager when loading a save or starting a new game
+	// Updates the list of playable tracks based on unlocked tracks from save data.
 	public void ApplyUnlockedMusicFromLoad(List<string> loadedUnlockedTrackNames)
 	{
-		// Start fresh with initial tracks, then add loaded/unlocked ones
 		InitializeWithInitialTracksOnly();
 
 		if (loadedUnlockedTrackNames != null && allPossibleUnlockableTracks != null)
@@ -105,11 +94,10 @@ public class BackgroundMusicPlayer : MonoBehaviour
 			{
 				if (string.IsNullOrEmpty(trackName)) continue;
 
-				// Find the actual AudioClip asset from the master list of all unlockable tracks
 				AudioClip track = allPossibleUnlockableTracks.Find(t => t != null && t.name == trackName);
 				if (track != null)
 				{
-					if (!currentlyPlayableTracks.Contains(track)) // Add if not already in the list (e.g., from initialMusicTracks)
+					if (!currentlyPlayableTracks.Contains(track))
 					{
 						currentlyPlayableTracks.Add(track);
 					}
@@ -122,16 +110,13 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		}
 		Debug.Log($"BackgroundMusicPlayer: Applied save data. Total playable tracks now: {currentlyPlayableTracks.Count}");
 
-		// If playOnStart is true and no music is currently playing (e.g., after loading a save),
-		// try to start playing a track from the now fully populated list.
 		if (playOnStart && !audioSource.isPlaying && currentlyPlayableTracks.Count > 0)
 		{
-			// Play the first available track.
-			// A more advanced system might save and load the last played track index.
 			PlayTrackByIndex(0);
 		}
 	}
 
+	// Plays a music track from the 'currentlyPlayableTracks' list using its index.
 	public void PlayTrackByIndex(int trackIndex)
 	{
 		if (currentlyPlayableTracks.Count == 0)
@@ -143,7 +128,7 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		{
 			Debug.LogWarning($"Track index {trackIndex} is out of bounds for currentlyPlayableTracks (count: {currentlyPlayableTracks.Count}). Defaulting to 0.");
 			trackIndex = 0;
-			if (currentlyPlayableTracks.Count == 0) return; // Still no tracks after defaulting
+			if (currentlyPlayableTracks.Count == 0) return;
 		}
 
 		currentPlayableTrackIndex = trackIndex;
@@ -151,8 +136,6 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		{
 			if (audioSource.clip == currentlyPlayableTracks[currentPlayableTrackIndex] && audioSource.isPlaying)
 			{
-				// Already playing this track, do nothing or restart if desired
-				// Debug.Log($"BackgroundMusicPlayer: Already playing '{audioSource.clip.name}'.");
 				return;
 			}
 			audioSource.clip = currentlyPlayableTracks[currentPlayableTrackIndex];
@@ -165,7 +148,7 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		}
 	}
 
-	// Called by player interaction (e.g., radio)
+	// Changes to the next available music track.
 	public void ChangeTrack()
 	{
 		if (currentlyPlayableTracks.Count == 0)
@@ -182,7 +165,7 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		PlayTrackByIndex(currentPlayableTrackIndex);
 	}
 
-	// Called by RewardManager when a new track is unlocked IN THE CURRENT SESSION
+	// Unlocks a new music track by its name and plays it.
 	public void UnlockAndPlayTrackByName(string trackName)
 	{
 		if (string.IsNullOrEmpty(trackName))
@@ -209,7 +192,6 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		{
 			currentlyPlayableTracks.Add(trackToUnlock);
 			newAdditionToPlayableList = true;
-			// GameDataManager is responsible for adding this to its list for saving (this is already done by RewardManager calling GameDataManager)
 			Debug.Log($"BackgroundMusicPlayer: Added '{trackToUnlock.name}' to playable list for current session.");
 		}
 		else
@@ -217,11 +199,9 @@ public class BackgroundMusicPlayer : MonoBehaviour
 			Debug.Log($"BackgroundMusicPlayer: Music track '{trackToUnlock.name}' was already in playable list.");
 		}
 
-		// Play the newly unlocked (or already available) track
 		int newTrackIndex = currentlyPlayableTracks.IndexOf(trackToUnlock);
 		if (newTrackIndex != -1)
 		{
-			// Switch to it if it's a new addition or if it's not already the current track
 			if (newAdditionToPlayableList || audioSource.clip != trackToUnlock || !audioSource.isPlaying)
 			{
 				PlayTrackByIndex(newTrackIndex);
@@ -229,6 +209,7 @@ public class BackgroundMusicPlayer : MonoBehaviour
 		}
 	}
 
+	// Stops the currently playing music.
 	public void StopMusic()
 	{
 		if (audioSource != null)
@@ -236,7 +217,4 @@ public class BackgroundMusicPlayer : MonoBehaviour
 			audioSource.Stop();
 		}
 	}
-
-	// PlayerPrefs reset for music is no longer relevant here as GameDataManager handles save data.
-	// A debug function to clear GameDataManager's music list would be in GameDataManager.
 }

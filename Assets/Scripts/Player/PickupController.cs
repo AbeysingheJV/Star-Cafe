@@ -1,56 +1,48 @@
 using UnityEngine;
-using TMPro; // Required for TextMeshPro UI elements
-
-// Placeholder for a Book script - you'll need to create this if you want books to be readable
-// public class ReadableBook : MonoBehaviour { public void InteractWithBook() { Debug.Log("Reading book: " + gameObject.name); /* Implement reading UI */ } }
-// Placeholder for RadioInteractable script
-// public class RadioInteractable : MonoBehaviour { public void Interact() { Debug.Log("Interacting with Radio: " + gameObject.name); /* Implement radio logic */ } }
-
+using TMPro;
 
 public class PickupController : MonoBehaviour
 {
 	[Header("References")]
-	[SerializeField] private PlayerInputHandler inputHandler;
-	[SerializeField] private Camera mainCamera;
-	[SerializeField] private Transform holdPoint;
+	[SerializeField] private PlayerInputHandler inputHandler; // Handles player input.
+	[SerializeField] private Camera mainCamera; // Player's main camera.
+	[SerializeField] private Transform holdPoint; // Point where held items are positioned.
 
 	[Header("Interaction Parameters")]
-	[SerializeField] private float interactionDistance = 3f;
-	[SerializeField] private LayerMask interactableLayerMask; // Assign ALL interactable layers here
+	[SerializeField] private float interactionDistance = 3f; // How far the player can interact.
+	[SerializeField] private LayerMask interactableLayerMask; // Layers that player can interact with.
 
 	[Header("UI Interaction Prompts (Assign in Inspector)")]
-	[SerializeField] private TextMeshProUGUI eActionText;
-	[SerializeField] private TextMeshProUGUI qActionText;
+	[SerializeField] private TextMeshProUGUI eActionText; // UI text for 'E' key actions.
+	[SerializeField] private TextMeshProUGUI qActionText; // UI text for 'Q' key actions.
 
 	[Header("Holding Parameters")]
-	[SerializeField] private float positionLerpSpeed = 15f;
-	[SerializeField] private float rotationLerpSpeed = 15f;
+	[SerializeField] private float positionLerpSpeed = 15f; // Speed for item position smoothing.
+	[SerializeField] private float rotationLerpSpeed = 15f; // Speed for item rotation smoothing.
 
 	[Header("Audio")]
-	[SerializeField] private AudioClip pickupSound;
-	[SerializeField] private AudioClip dropSound;
+	[SerializeField] private AudioClip pickupSound; // Sound when picking up an item.
+	[SerializeField] private AudioClip dropSound; // Sound when dropping an item.
 
-	private Pickupable currentlyHeldItem = null;
-	private Rigidbody heldItemRigidbody = null;
-	private bool originalGravityState;
-	private Collider playerCollider;
+	private Pickupable currentlyHeldItem = null; // The item currently held by the player.
+	private Rigidbody heldItemRigidbody = null; // Rigidbody of the currently held item.
+	private bool originalGravityState; // Stores original gravity state of held item.
+	private Collider playerCollider; // Collider of the player.
+	private CookingStation activeCookingStation = null; // Currently active cooking station.
+	private AudioSource audioSource; // Component for playing sounds.
+	private GameObject lastLookedAtGameObjectForUI = null; // Last object player looked at for UI updates.
+	private string lastEText = ""; // Stores last 'E' action text to avoid unnecessary UI updates.
+	private string lastQText = ""; // Stores last 'Q' action text.
 
-	private CookingStation activeCookingStation = null; // For hold-to-cook stations
-	private AudioSource audioSource;
+	private int ingredientSourceLayerValue = -1; // Integer value for 'IngredientSources' layer.
+	private int pickupableLayerValue = -1; // Integer value for 'Pickupable' layer.
+	private int catLayerValue = -1; // Integer value for 'CatLayer'.
+	private int counter1LayerValue = -1; // Integer value for 'Counter1' layer (CookingStation).
+	private int counter2LayerValue = -1; // Integer value for 'Counter2' layer (ApplianceStation).
+	private int radioLayerValue = -1; // Integer value for 'Radio' layer.
+	private int bookLayerValue = -1; // Integer value for 'Book' layer.
 
-	private GameObject lastLookedAtGameObjectForUI = null;
-	private string lastEText = "";
-	private string lastQText = "";
-
-	// Layer integer values
-	private int ingredientSourceLayerValue = -1;
-	private int pickupableLayerValue = -1;
-	private int catLayerValue = -1;
-	private int counter1LayerValue = -1; // For Cooking Stations
-	private int counter2LayerValue = -1; // For Appliance Stations
-	private int radioLayerValue = -1;
-	private int bookLayerValue = -1;
-
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		Debug.Log("PickupController: Awake()");
@@ -73,7 +65,6 @@ public class PickupController : MonoBehaviour
 		if (eActionText == null) Debug.LogWarning("E_Action_Text not assigned in PickupController. E prompts will not appear.", this);
 		if (qActionText == null) Debug.LogWarning("Q_Action_Text not assigned in PickupController. Q prompts will not appear.", this);
 
-
 		if (interactableLayerMask.value == 0) Debug.LogWarning("InteractableLayerMask not set in PickupController. Interactions might not work.", this);
 		else
 		{
@@ -82,7 +73,6 @@ public class PickupController : MonoBehaviour
 			Debug.Log($"PickupController: InteractableLayerMask includes: {layersInMask}");
 		}
 
-		// Get integer values for specific layers by name
 		ingredientSourceLayerValue = LayerMask.NameToLayer("IngredientSources");
 		pickupableLayerValue = LayerMask.NameToLayer("Pickupable");
 		catLayerValue = LayerMask.NameToLayer("CatLayer");
@@ -105,6 +95,7 @@ public class PickupController : MonoBehaviour
 		if (qActionText != null) qActionText.text = "";
 	}
 
+	// Called when the object becomes enabled and active.
 	void OnEnable()
 	{
 		if (inputHandler != null)
@@ -119,6 +110,7 @@ public class PickupController : MonoBehaviour
 		}
 	}
 
+	// Called when the object becomes disabled or inactive.
 	void OnDisable()
 	{
 		if (inputHandler != null)
@@ -132,17 +124,20 @@ public class PickupController : MonoBehaviour
 		HideAllActionTexts();
 	}
 
+	// Called every frame.
 	void Update()
 	{
 		if (mainCamera == null) return;
 		CheckForInteractableObjectForUI();
 	}
 
+	// Called every fixed framerate frame, good for physics.
 	void FixedUpdate()
 	{
 		if (currentlyHeldItem != null && heldItemRigidbody != null) MoveHeldItemSmoothly();
 	}
 
+	// Checks what interactable object the player is looking at and updates UI prompts.
 	private void CheckForInteractableObjectForUI()
 	{
 		RaycastHit hit;
@@ -154,12 +149,11 @@ public class PickupController : MonoBehaviour
 			lastLookedAtGameObjectForUI = hit.collider.gameObject;
 			int hitLayer = hit.collider.gameObject.layer;
 
-			// E Key Interaction Prompts
 			if (hitLayer == pickupableLayerValue)
 			{
 				currentEText = " Pickup/Drop";
 			}
-			else if (currentlyHeldItem == null) // Only show other E prompts if not holding anything
+			else if (currentlyHeldItem == null)
 			{
 				if (hitLayer == ingredientSourceLayerValue) { currentEText = " Grab item"; }
 				else if (hitLayer == catLayerValue) { currentEText = " Pet"; }
@@ -167,7 +161,6 @@ public class PickupController : MonoBehaviour
 				else if (hitLayer == bookLayerValue) { currentEText = " Read"; }
 			}
 
-			// Q Key Prompts for Counters
 			if (hitLayer == counter1LayerValue)
 			{
 				CookingStation cs = hit.collider.GetComponent<CookingStation>();
@@ -188,6 +181,7 @@ public class PickupController : MonoBehaviour
 		if (qActionText != null && currentQText != lastQText) { qActionText.text = currentQText; lastQText = currentQText; }
 	}
 
+	// Clears all interaction prompt UI texts.
 	private void HideAllActionTexts()
 	{
 		if (eActionText != null) eActionText.text = "";
@@ -197,9 +191,10 @@ public class PickupController : MonoBehaviour
 		lastLookedAtGameObjectForUI = null;
 	}
 
-	private void HandleInteractionInput() // E key pressed
+	// Handles player's main interaction input E.
+	private void HandleInteractionInput()
 	{
-		RaycastHit hit; // Perform a fresh raycast for the action
+		RaycastHit hit;
 		bool hitSomething = Physics.Raycast(mainCamera.transform.position, mainCamera.transform.forward, out hit, interactionDistance, interactableLayerMask);
 
 		if (currentlyHeldItem != null)
@@ -250,7 +245,8 @@ public class PickupController : MonoBehaviour
 		}
 	}
 
-	private void HandleCookActionInput() // Q key pressed
+	// Handles player's cook action input Q.
+	private void HandleCookActionInput()
 	{
 		if (currentlyHeldItem != null) return;
 
@@ -280,6 +276,7 @@ public class PickupController : MonoBehaviour
 		}
 	}
 
+	// Handles player's cook action input release.
 	private void HandleCookActionInputReleased()
 	{
 		if (activeCookingStation != null)
@@ -289,6 +286,7 @@ public class PickupController : MonoBehaviour
 		}
 	}
 
+	// Tries to spawn an ingredient from a source and makes the player hold it.
 	private bool TrySpawnFromSource(IngredientSource source)
 	{
 		if (source != null)
@@ -299,6 +297,7 @@ public class PickupController : MonoBehaviour
 		return false;
 	}
 
+	// Spawns a new item and makes the player hold it.
 	private void SpawnAndHoldItem(GameObject itemPrefab)
 	{
 		if (holdPoint == null) { Debug.LogError("HoldPoint is not assigned!"); return; }
@@ -310,7 +309,6 @@ public class PickupController : MonoBehaviour
 		if (heldItemRigidbody == null) { Debug.LogError($"Spawned item {itemPrefab.name} is missing Rigidbody!"); Destroy(newItemGO); currentlyHeldItem = null; return; }
 
 		Collider newItemCollider = newItemGO.GetComponent<Collider>();
-		// if (newItemCollider == null) { Debug.LogWarning($"Spawned item {itemPrefab.name} is missing a Collider!"); } // Collider isn't strictly necessary for holding logic
 
 		originalGravityState = heldItemRigidbody.useGravity;
 		heldItemRigidbody.useGravity = false;
@@ -321,6 +319,7 @@ public class PickupController : MonoBehaviour
 		HideAllActionTexts();
 	}
 
+	// Makes the player grab an existing item from the scene.
 	private void GrabExistingItem(Pickupable item, Collider itemCollider)
 	{
 		if (item == null) return;
@@ -343,6 +342,7 @@ public class PickupController : MonoBehaviour
 		}
 	}
 
+	// Makes the player drop the currently held item.
 	private void DropItem(bool playSound)
 	{
 		if (currentlyHeldItem == null || heldItemRigidbody == null) return;
@@ -358,6 +358,7 @@ public class PickupController : MonoBehaviour
 		heldItemRigidbody = null;
 	}
 
+	// Smoothly moves the held item to the player's hold point.
 	private void MoveHeldItemSmoothly()
 	{
 		if (currentlyHeldItem == null || heldItemRigidbody == null || holdPoint == null) return;

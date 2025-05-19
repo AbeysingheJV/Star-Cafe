@@ -3,38 +3,43 @@ using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Linq;
 
+// Requires a Collider component to be attached to the same GameObject.
 [RequireComponent(typeof(Collider))]
 public class ApplianceStation : MonoBehaviour
 {
 	[Header("Setup")]
-	[SerializeField] private List<RecipeData> availableRecipes;
-	[SerializeField] private Transform resultSpawnPoint;
-	[SerializeField] private Slider progressBar;
-	[SerializeField] private string specificCookActionName = "Fry"; // Default action verb for this appliance type
+	[SerializeField] private List<RecipeData> availableRecipes; // Recipes this appliance can make.
+	[SerializeField] private Transform resultSpawnPoint; // Where the cooked dish appears.
+	[SerializeField] private Slider progressBar; // UI slider to show cooking progress.
+	[SerializeField] private string specificCookActionName = "Fry"; // Action name for UI prompts (e.g., "Fry").
 
 	[Header("VFX")]
-	[SerializeField] private ParticleSystem cookingProcessVFXPrefab;
-	[SerializeField] private Transform cookingProcessVFXSpawnPoint;
-	[SerializeField] private ParticleSystem underPanFireVFXPrefab;
-	[SerializeField] private Transform fireSpawnPoint;
+	[SerializeField] private ParticleSystem cookingProcessVFXPrefab; // Particle effect for when cooking.
+	[SerializeField] private Transform cookingProcessVFXSpawnPoint; // Where the cooking VFX appears.
+	[SerializeField] private ParticleSystem underPanFireVFXPrefab; // Particle effect for fire under the appliance.
+	[SerializeField] private Transform fireSpawnPoint; // Where the fire VFX appears.
 
 	[Header("Audio")]
-	[SerializeField] private AudioClip processStartSound;
-	[SerializeField] private AudioClip processingLoopSound;
-	[SerializeField] private AudioClip processCompleteSound;
+	[SerializeField] private AudioClip processStartSound; // Sound when cooking starts.
+	[SerializeField] private AudioClip processingLoopSound; // Looping sound while cooking.
+	[SerializeField] private AudioClip processCompleteSound; // Sound when cooking finishes.
 
 	[Header("State (Read Only)")]
-	[SerializeField] private List<Pickupable> ingredientsOnStation = new List<Pickupable>();
+	[SerializeField] private List<Pickupable> ingredientsOnStation = new List<Pickupable>(); // Ingredients currently on the station.
 
-	private bool isCooking = false;
-	private float currentCookTimer = 0f;
-	private RecipeData currentRecipe = null;
-	private Collider triggerCollider;
-	private AudioSource audioSource;
+	private bool isCooking = false; // Is the appliance currently cooking?
+	private float currentCookTimer = 0f; // Timer for the current cooking process.
+	private RecipeData currentRecipe = null; // The recipe currently being cooked.
+	private Collider triggerCollider; // The station's trigger collider.
+	private AudioSource audioSource; // Component to play audio.
 
-	private ParticleSystem currentCookingProcessVFXInstance = null;
-	private ParticleSystem currentUnderPanFireVFXInstance = null;
+	private ParticleSystem currentCookingProcessVFXInstance = null; // Instance of the cooking VFX.
+	private ParticleSystem currentUnderPanFireVFXInstance = null; // Instance of the fire VFX.
 
+	// Public property to check if the appliance is currently cooking.
+	public bool IsCooking => isCooking;
+
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		triggerCollider = GetComponent<Collider>();
@@ -51,24 +56,21 @@ public class ApplianceStation : MonoBehaviour
 		if (underPanFireVFXPrefab == null) { Debug.LogWarning($"ApplianceStation on {gameObject.name} is missing its Under Pan Fire VFX Prefab assignment!", this); }
 	}
 
+	// Called every frame.
 	void Update()
 	{
 		if (isCooking) UpdateAutoCooking(Time.deltaTime);
 		if (progressBar != null && progressBar.gameObject.activeSelf) UpdateProgressBarTransform();
 	}
 
+	// Called when the GameObject is being destroyed.
 	void OnDestroy()
 	{
 		StopAllVFX();
 		if (audioSource != null && audioSource.isPlaying && audioSource.loop) audioSource.Stop();
 	}
 
-	private void StopAllVFX()
-	{
-		if (currentCookingProcessVFXInstance != null) { Destroy(currentCookingProcessVFXInstance.gameObject); currentCookingProcessVFXInstance = null; }
-		if (currentUnderPanFireVFXInstance != null) { Destroy(currentUnderPanFireVFXInstance.gameObject); currentUnderPanFireVFXInstance = null; }
-	}
-
+	// Called when another Collider enters this GameObject's trigger.
 	void OnTriggerEnter(Collider other)
 	{
 		Pickupable p = other.GetComponent<Pickupable>();
@@ -78,21 +80,19 @@ public class ApplianceStation : MonoBehaviour
 		}
 	}
 
+	// Called when another Collider exits this GameObject's trigger.
 	void OnTriggerExit(Collider other)
 	{
 		Pickupable p = other.GetComponent<Pickupable>();
 		if (p != null && ingredientsOnStation.Contains(p)) ingredientsOnStation.Remove(p);
 	}
 
-	// Public property for PickupController to check status
-	public bool IsCooking => isCooking;
-
-	// Method for PickupController to get interaction info (primarily its boolean return value now)
+	// Determines if the player can interact with this station and provides an action name.
 	public virtual bool GetCookActionInfo(out string actionName)
 	{
 		if (isCooking)
 		{
-			actionName = ""; // No prompt text if busy (PickupController handles this via IsCooking check)
+			actionName = "";
 			return false;
 		}
 
@@ -104,13 +104,14 @@ public class ApplianceStation : MonoBehaviour
 
 		if (recipe != null)
 		{
-			actionName = specificCookActionName; // Still set it, though PickupController might override UI text
-			return true; // Ready to cook this recipe
+			actionName = specificCookActionName;
+			return true;
 		}
-		actionName = ""; // No action available
-		return false; // No recipe matched or no ingredients
+		actionName = "";
+		return false;
 	}
 
+	// Starts the automatic cooking process if a valid recipe is matched.
 	public bool StartAutoCooking()
 	{
 		if (isCooking) return false;
@@ -136,6 +137,7 @@ public class ApplianceStation : MonoBehaviour
 		return false;
 	}
 
+	// Updates the cooking timer and progress bar each frame during auto-cooking.
 	private void UpdateAutoCooking(float deltaTime)
 	{
 		if (!isCooking || currentRecipe == null) return;
@@ -144,6 +146,7 @@ public class ApplianceStation : MonoBehaviour
 		if (currentCookTimer >= currentRecipe.cookingDuration) CompleteCooking();
 	}
 
+	// Finalizes the cooking process: spawns result, cleans up ingredients and state.
 	private void CompleteCooking()
 	{
 		if (!isCooking || currentRecipe == null) return;
@@ -157,6 +160,7 @@ public class ApplianceStation : MonoBehaviour
 		ResetState();
 	}
 
+	// Resets the station's cooking state and UI.
 	private void ResetState()
 	{
 		isCooking = false;
@@ -171,6 +175,7 @@ public class ApplianceStation : MonoBehaviour
 		currentCookTimer = 0f;
 	}
 
+	// Finds a matching recipe from available recipes based on current ingredients.
 	protected virtual RecipeData FindMatchingRecipe(List<IngredientData> currentIngredients)
 	{
 		if (currentIngredients == null || currentIngredients.Count == 0) return null;
@@ -181,6 +186,7 @@ public class ApplianceStation : MonoBehaviour
 		return null;
 	}
 
+	// Checks if the current ingredients exactly match the required ingredients for a recipe.
 	private bool DoIngredientsMatch(List<IngredientData> required, List<IngredientData> current)
 	{
 		if (required == null || current == null || required.Count != current.Count || required.Count == 0) return false;
@@ -191,7 +197,8 @@ public class ApplianceStation : MonoBehaviour
 		return true;
 	}
 
-	void UpdateProgressBarTransform()
+	// Updates the progress bar's transform to always face the camera (for world-space UI).
+	private void UpdateProgressBarTransform()
 	{
 		if (progressBar == null) return;
 		Canvas canvas = progressBar.GetComponentInParent<Canvas>();
@@ -203,6 +210,14 @@ public class ApplianceStation : MonoBehaviour
 		}
 	}
 
+	// Stops and destroys all active VFX instances for this station.
+	private void StopAllVFX()
+	{
+		if (currentCookingProcessVFXInstance != null) { Destroy(currentCookingProcessVFXInstance.gameObject); currentCookingProcessVFXInstance = null; }
+		if (currentUnderPanFireVFXInstance != null) { Destroy(currentUnderPanFireVFXInstance.gameObject); currentUnderPanFireVFXInstance = null; }
+	}
+
+	// Plays the particle effect for the cooking process.
 	private void PlayCookingProcessVFX()
 	{
 		if (cookingProcessVFXPrefab != null)
@@ -215,6 +230,7 @@ public class ApplianceStation : MonoBehaviour
 		}
 	}
 
+	// Stops the particle effect for the cooking process.
 	private void StopCookingProcessVFX()
 	{
 		if (currentCookingProcessVFXInstance != null)
@@ -225,6 +241,7 @@ public class ApplianceStation : MonoBehaviour
 		}
 	}
 
+	// Plays the particle effect for the fire under the appliance.
 	private void PlayUnderPanFireVFX()
 	{
 		if (underPanFireVFXPrefab != null && fireSpawnPoint != null)
@@ -235,6 +252,7 @@ public class ApplianceStation : MonoBehaviour
 		}
 	}
 
+	// Stops the particle effect for the fire under the appliance.
 	private void StopUnderPanFireVFX()
 	{
 		if (currentUnderPanFireVFXInstance != null)

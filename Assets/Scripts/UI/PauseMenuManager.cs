@@ -1,33 +1,34 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI; // Required for Slider and Toggle
-using TMPro;          // Required for TextMeshProUGUI (if displaying slider values)
-using UnityEngine.InputSystem; // If using new Input System for pause
+using UnityEngine.UI;
+using TMPro;
+using UnityEngine.InputSystem; // Though not fully used, kept for potential future use.
 
 public class PauseMenuManager : MonoBehaviour
 {
 	public static PauseMenuManager Instance { get; private set; }
 
 	[Header("UI Panels")]
-	public GameObject pauseMenuPanel;       // Assign your main PauseMenuPanel
-	public GameObject settingsPanel_InGame; // Assign your in-game SettingsPanel
-	public GameObject helpPanel_InGame;     // Assign your in-game HelpPanel
+	public GameObject pauseMenuPanel; // Main panel for the pause menu.
+	public GameObject settingsPanel_InGame; // Panel for in-game settings.
+	public GameObject helpPanel_InGame; // Panel for in-game help.
 
 	[Header("Settings Panel UI (Assign in Inspector)")]
-	public Slider masterVolumeSlider;
-	public Slider musicVolumeSlider;
-	public Slider sfxVolumeSlider;
-	public Toggle bloomToggle;
+	public Slider masterVolumeSlider; // Slider for master volume.
+	public Slider musicVolumeSlider; // Slider for music volume.
+	public Slider sfxVolumeSlider; // Slider for SFX volume.
+	public Toggle bloomToggle; // Toggle for Bloom graphics effect.
 
 	[Header("Main Menu Scene")]
-	public string mainMenuSceneName = "MainMenu_SimpleScene"; // Or your main menu scene name
+	public string mainMenuSceneName = "MainMenu_SimpleScene"; // Name of the main menu scene.
 
-	public static bool isGamePaused = false;
+	public static bool isGamePaused = false; // Static flag to check if game is paused.
 
 	[Header("Input")]
-	public KeyCode pauseKey = KeyCode.Escape;
-	// public InputActionReference pauseInputAction; // For new Input System
+	public KeyCode pauseKey = KeyCode.Escape; // Key to toggle pause menu.
+											  // public InputActionReference pauseInputAction; // For new Input System (currently commented out).
 
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
@@ -50,6 +51,7 @@ public class PauseMenuManager : MonoBehaviour
 		Time.timeScale = 1f;
 	}
 
+	// Called before the first frame update.
 	void Start()
 	{
 		SetupVolumeSliderListeners();
@@ -61,6 +63,7 @@ public class PauseMenuManager : MonoBehaviour
 		}
 	}
 
+	// Called every frame.
 	void Update()
 	{
 		if (Input.GetKeyDown(pauseKey))
@@ -73,12 +76,14 @@ public class PauseMenuManager : MonoBehaviour
 		// }
 	}
 
+	// Toggles the pause state of the game.
 	public void TogglePause()
 	{
 		if (isGamePaused) ResumeGame();
 		else PauseGame();
 	}
 
+	// Resumes the game from a paused state.
 	public void ResumeGame()
 	{
 		if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
@@ -93,7 +98,8 @@ public class PauseMenuManager : MonoBehaviour
 		Cursor.visible = false;
 	}
 
-	void PauseGame()
+	// Pauses the game.
+	private void PauseGame()
 	{
 		if (pauseMenuPanel != null) pauseMenuPanel.SetActive(true);
 		if (settingsPanel_InGame != null) settingsPanel_InGame.SetActive(false);
@@ -107,6 +113,7 @@ public class PauseMenuManager : MonoBehaviour
 		Cursor.visible = true;
 	}
 
+	// Opens the in-game settings panel.
 	public void OpenSettings_InGame()
 	{
 		Debug.Log("In-Game Settings button pressed.");
@@ -122,6 +129,7 @@ public class PauseMenuManager : MonoBehaviour
 		}
 	}
 
+	// Closes the in-game settings panel.
 	public void CloseSettings_InGame()
 	{
 		Debug.Log("Closing In-Game Settings panel.");
@@ -133,12 +141,14 @@ public class PauseMenuManager : MonoBehaviour
 		}
 	}
 
+	// Loads all current settings (volume, graphics) to the UI elements.
 	private void LoadAllSettingsToUI()
 	{
 		LoadVolumeSettingsToUI();
 		LoadGraphicsSettingsToUI();
 	}
 
+	// Loads current volume settings to the UI sliders.
 	private void LoadVolumeSettingsToUI()
 	{
 		if (AudioManager.Instance == null)
@@ -151,6 +161,7 @@ public class PauseMenuManager : MonoBehaviour
 		if (sfxVolumeSlider != null) sfxVolumeSlider.value = AudioManager.Instance.SFXVolumeSetting;
 	}
 
+	// Loads current graphics settings (e.g., Bloom) to the UI elements.
 	private void LoadGraphicsSettingsToUI()
 	{
 		if (GraphicsSettingsManager.Instance == null)
@@ -166,6 +177,7 @@ public class PauseMenuManager : MonoBehaviour
 		}
 	}
 
+	// Sets up event listeners for the volume sliders.
 	private void SetupVolumeSliderListeners()
 	{
 		if (AudioManager.Instance == null)
@@ -178,6 +190,7 @@ public class PauseMenuManager : MonoBehaviour
 		if (sfxVolumeSlider != null) { sfxVolumeSlider.onValueChanged.RemoveAllListeners(); sfxVolumeSlider.onValueChanged.AddListener(AudioManager.Instance.SetSFXVolume); }
 	}
 
+	// Sets up event listeners for graphics settings UI elements.
 	private void SetupGraphicsSettingListeners()
 	{
 		if (GraphicsSettingsManager.Instance == null)
@@ -192,6 +205,7 @@ public class PauseMenuManager : MonoBehaviour
 		}
 	}
 
+	// Opens the in-game help panel.
 	public void OpenHelp_InGame()
 	{
 		Debug.Log("In-Game Help button pressed.");
@@ -203,6 +217,7 @@ public class PauseMenuManager : MonoBehaviour
 		}
 	}
 
+	// Closes the in-game help panel.
 	public void CloseHelp_InGame()
 	{
 		Debug.Log("Closing In-Game Help panel.");
@@ -214,6 +229,7 @@ public class PauseMenuManager : MonoBehaviour
 		}
 	}
 
+	// Exits the current game session and returns to the main menu.
 	public void ExitToMainMenu()
 	{
 		Debug.Log("Exiting to Main Menu: " + mainMenuSceneName);
@@ -222,7 +238,6 @@ public class PauseMenuManager : MonoBehaviour
 
 		if (GameDataManager.Instance != null && GameDataManager.CurrentSaveSlot != -1)
 		{
-			// Corrected method name:
 			GameDataManager.Instance.SaveActiveGameState();
 		}
 		SceneManager.LoadScene(mainMenuSceneName);

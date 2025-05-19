@@ -2,16 +2,17 @@ using UnityEngine;
 
 public class PlayerActionVFXManager : MonoBehaviour
 {
-	[Header("VFX Settings")]
-	[SerializeField] private ParticleSystem defaultHoldActionVFXPrefab; // Assign your "HoldingActionVFX" prefab here
-	[SerializeField] private Vector3 vfxOffsetFromCamera = new Vector3(0f, -0.2f, 0.7f); // Adjust as needed: X, Y, Z
-	[SerializeField] private float vfxDestroyDelay = 2f; // Time after stopping emission to destroy the VFX object
-
-	private ParticleSystem currentHoldActionVFXInstance;
-	private Camera mainCamera;
-
 	public static PlayerActionVFXManager Instance { get; private set; }
 
+	[Header("VFX Settings")]
+	[SerializeField] private ParticleSystem defaultHoldActionVFXPrefab; // Prefab for the hold action VFX.
+	[SerializeField] private Vector3 vfxOffsetFromCamera = new Vector3(0f, -0.2f, 0.7f); // Offset from camera for VFX position.
+	[SerializeField] private float vfxDestroyDelay = 2f; // Delay before destroying VFX after it stops.
+
+	private ParticleSystem currentHoldActionVFXInstance; // Instance of the currently playing hold action VFX.
+	private Camera mainCamera; // Reference to the main camera.
+
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
@@ -20,9 +21,20 @@ public class PlayerActionVFXManager : MonoBehaviour
 			return;
 		}
 		Instance = this;
-		mainCamera = Camera.main; // Assuming your player's view camera is tagged "MainCamera"
+		mainCamera = Camera.main;
 	}
 
+	// Called when the GameObject is being destroyed.
+	void OnDestroy()
+	{
+		StopHoldActionVFXImmediate();
+		if (Instance == this)
+		{
+			Instance = null;
+		}
+	}
+
+	// Plays the hold action visual effect.
 	public void PlayHoldActionVFX()
 	{
 		if (defaultHoldActionVFXPrefab == null)
@@ -31,7 +43,7 @@ public class PlayerActionVFXManager : MonoBehaviour
 			return;
 		}
 
-		if (currentHoldActionVFXInstance != null) // If one is already playing, stop it first
+		if (currentHoldActionVFXInstance != null)
 		{
 			StopHoldActionVFXImmediate();
 		}
@@ -42,55 +54,37 @@ public class PlayerActionVFXManager : MonoBehaviour
 			return;
 		}
 
-		// Instantiate the VFX
-		// Position it relative to the camera: camera's position + camera's forward vector * Z offset + camera's right * X offset + camera's up * Y offset
 		Vector3 spawnPosition = mainCamera.transform.position +
 								mainCamera.transform.forward * vfxOffsetFromCamera.z +
 								mainCamera.transform.right * vfxOffsetFromCamera.x +
 								mainCamera.transform.up * vfxOffsetFromCamera.y;
 
 		currentHoldActionVFXInstance = Instantiate(defaultHoldActionVFXPrefab, spawnPosition, mainCamera.transform.rotation);
-
-		// Parent to camera so it moves with camera view (optional, but good for first-person)
-		// If your camera has a specific "VFX anchor point" child object, parent to that instead.
-		currentHoldActionVFXInstance.transform.SetParent(mainCamera.transform, true); // Set to worldPositionStays = true
-
+		currentHoldActionVFXInstance.transform.SetParent(mainCamera.transform, true);
 		currentHoldActionVFXInstance.Play();
 		Debug.Log("PlayerActionVFXManager: Playing Hold Action VFX.");
 	}
 
+	// Stops the hold action visual effect emission and schedules its destruction.
 	public void StopHoldActionVFX()
 	{
 		if (currentHoldActionVFXInstance != null)
 		{
 			Debug.Log("PlayerActionVFXManager: Stopping Hold Action VFX emission.");
-			currentHoldActionVFXInstance.Stop(true, ParticleSystemStopBehavior.StopEmitting); // Stop emitting, let existing particles fade
-
-			// Detach from parent so it doesn't disappear if camera moves/is disabled quickly
+			currentHoldActionVFXInstance.Stop(true, ParticleSystemStopBehavior.StopEmitting);
 			currentHoldActionVFXInstance.transform.SetParent(null);
-
 			Destroy(currentHoldActionVFXInstance.gameObject, vfxDestroyDelay);
 			currentHoldActionVFXInstance = null;
 		}
 	}
 
-	// Used if we need to immediately clear an old one before starting a new one
+	// Stops and immediately destroys the hold action visual effect.
 	private void StopHoldActionVFXImmediate()
 	{
 		if (currentHoldActionVFXInstance != null)
 		{
 			Destroy(currentHoldActionVFXInstance.gameObject);
 			currentHoldActionVFXInstance = null;
-		}
-	}
-
-	// Ensure VFX is stopped if this manager is destroyed
-	void OnDestroy()
-	{
-		StopHoldActionVFXImmediate();
-		if (Instance == this)
-		{
-			Instance = null;
 		}
 	}
 }

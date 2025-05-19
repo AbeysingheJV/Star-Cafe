@@ -1,15 +1,15 @@
 using UnityEngine;
-using System.IO; // For file operations
-using System.Collections.Generic; // For List
-using System; // For DateTime
+using System.IO;
+using System.Collections.Generic;
+using System;
 
 public static class SaveSystem
 {
-	private static readonly string SAVE_FOLDER = Application.persistentDataPath + "/Saves/";
-	private const string FILE_EXTENSION = ".json";
-	public const int MAX_SAVE_SLOTS = 3; // Or however many slots you want
+	private static readonly string SAVE_FOLDER = Application.persistentDataPath + "/Saves/"; // Folder where save files are stored.
+	private const string FILE_EXTENSION = ".json"; // File extension for save files.
+	public const int MAX_SAVE_SLOTS = 3; // Maximum number of save slots allowed.
 
-	// Call this once at game startup to ensure the folder exists
+	// Initializes the save system, ensuring the save folder exists.
 	public static void Initialize()
 	{
 		if (!Directory.Exists(SAVE_FOLDER))
@@ -19,11 +19,13 @@ public static class SaveSystem
 		}
 	}
 
+	// Gets the full file path for a given save slot number.
 	private static string GetFilePath(int slotNumber)
 	{
 		return SAVE_FOLDER + "saveSlot_" + slotNumber + FILE_EXTENSION;
 	}
 
+	// Saves the provided game data to the specified slot number.
 	public static void SaveGame(SaveData data, int slotNumber)
 	{
 		if (slotNumber < 0 || slotNumber >= MAX_SAVE_SLOTS)
@@ -32,8 +34,8 @@ public static class SaveSystem
 			return;
 		}
 
-		data.lastUpdatedTicks = DateTime.Now.Ticks; // Update timestamp before saving
-		string json = JsonUtility.ToJson(data, true); // 'true' for pretty print (easier to debug)
+		data.lastUpdatedTicks = DateTime.Now.Ticks;
+		string json = JsonUtility.ToJson(data, true);
 		string filePath = GetFilePath(slotNumber);
 
 		try
@@ -47,6 +49,7 @@ public static class SaveSystem
 		}
 	}
 
+	// Loads game data from the specified slot number.
 	public static SaveData LoadGame(int slotNumber)
 	{
 		if (slotNumber < 0 || slotNumber >= MAX_SAVE_SLOTS)
@@ -74,16 +77,18 @@ public static class SaveSystem
 		else
 		{
 			Debug.Log($"SaveSystem: No save file found for slot {slotNumber}.");
-			return null; // Or return new SaveData() if you want to start fresh if no file
+			return null;
 		}
 	}
 
+	// Checks if a save file exists for the given slot number.
 	public static bool DoesSaveExist(int slotNumber)
 	{
 		if (slotNumber < 0 || slotNumber >= MAX_SAVE_SLOTS) return false;
 		return File.Exists(GetFilePath(slotNumber));
 	}
 
+	// Deletes the save file for the given slot number.
 	public static void DeleteSave(int slotNumber)
 	{
 		if (slotNumber < 0 || slotNumber >= MAX_SAVE_SLOTS) return;
@@ -102,7 +107,7 @@ public static class SaveSystem
 		}
 	}
 
-	// Gets metadata for all slots (e.g., for a load game screen)
+	// Retrieves information about all save slots (used/empty, last saved time).
 	public static List<SaveSlotInfo> GetSaveSlotsInfo()
 	{
 		List<SaveSlotInfo> infos = new List<SaveSlotInfo>();
@@ -113,40 +118,39 @@ public static class SaveSystem
 			{
 				try
 				{
-					// We only need the timestamp, so we could parse just that part of JSON,
-					// but loading the whole SaveData is simpler for now.
-					SaveData data = LoadGame(i); // Use existing LoadGame to get data
+					SaveData data = LoadGame(i);
 					if (data != null)
 					{
 						infos.Add(new SaveSlotInfo(i, true, data.GetLastUpdatedDateTime()));
 					}
-					else // File exists but couldn't be loaded (corrupted?)
+					else
 					{
-						infos.Add(new SaveSlotInfo(i, false, DateTime.MinValue)); // Mark as existing but unloadable
+						infos.Add(new SaveSlotInfo(i, false, DateTime.MinValue));
 					}
 				}
 				catch (Exception e)
 				{
 					Debug.LogError($"GetSaveSlotsInfo: Error reading slot {i}. {e.Message}");
-					infos.Add(new SaveSlotInfo(i, false, DateTime.MinValue)); // Error, treat as empty/corrupt
+					infos.Add(new SaveSlotInfo(i, false, DateTime.MinValue));
 				}
 			}
 			else
 			{
-				infos.Add(new SaveSlotInfo(i, false, DateTime.MinValue)); // Empty slot
+				infos.Add(new SaveSlotInfo(i, false, DateTime.MinValue));
 			}
 		}
 		return infos;
 	}
 }
 
-// Helper class to store info about each save slot for UI display
+// Helper class to store display information for a save slot.
 public class SaveSlotInfo
 {
-	public int SlotNumber { get; private set; }
-	public bool IsUsed { get; private set; }
-	public DateTime LastSaved { get; private set; }
+	public int SlotNumber { get; private set; } // The slot number.
+	public bool IsUsed { get; private set; } // True if the slot contains save data.
+	public DateTime LastSaved { get; private set; } // The date and time the slot was last saved.
 
+	// Constructor for creating SaveSlotInfo.
 	public SaveSlotInfo(int slotNumber, bool isUsed, DateTime lastSaved)
 	{
 		SlotNumber = slotNumber;

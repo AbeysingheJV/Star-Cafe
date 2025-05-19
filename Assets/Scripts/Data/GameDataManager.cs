@@ -1,16 +1,12 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
-using System;
-using UnityEngine.SceneManagement; // Required for scene management
+using UnityEngine.SceneManagement;
 
 public class GameDataManager : MonoBehaviour
 {
 	public static GameDataManager Instance { get; private set; }
-
 	public static int CurrentSaveSlot { get; private set; } = -1;
 
-	// Current game session data
 	public int TotalDishesCompleted { get; private set; }
 	public List<string> UnlockedRecipeNames { get; private set; } = new List<string>();
 	public List<string> UnlockedMusicTrackNames { get; private set; } = new List<string>();
@@ -28,7 +24,7 @@ public class GameDataManager : MonoBehaviour
 	private bool hasPendingDataToApply = false;
 	private string sceneToLoadAfterDataPrep = "";
 
-
+	// Called when the script instance is being loaded.
 	void Awake()
 	{
 		if (Instance != null && Instance != this)
@@ -41,29 +37,28 @@ public class GameDataManager : MonoBehaviour
 
 		SaveSystem.Initialize();
 
-		// Attempt to find managers if not assigned in Inspector,
-		// but this might be too early if they are in a scene not yet loaded.
-		// We'll re-check in OnSceneLoaded.
 		if (orderManager == null) orderManager = FindObjectOfType<OrderManager>();
 		if (musicPlayer == null) musicPlayer = FindObjectOfType<BackgroundMusicPlayer>();
 		if (rewardManager == null) rewardManager = FindObjectOfType<RewardManager>();
 	}
 
+	// Called when the object becomes enabled and active.
 	void OnEnable()
 	{
 		SceneManager.sceneLoaded += OnSceneLoaded;
 	}
 
+	// Called when the object becomes disabled or inactive.
 	void OnDisable()
 	{
 		SceneManager.sceneLoaded -= OnSceneLoaded;
 	}
 
+	// Called when a new scene has finished loading.
 	void OnSceneLoaded(Scene scene, LoadSceneMode mode)
 	{
-		// Re-acquire references to scene-specific managers
 		if (orderManager == null) orderManager = FindObjectOfType<OrderManager>();
-		if (musicPlayer == null) musicPlayer = FindObjectOfType<BackgroundMusicPlayer>(); // Though BGMusicPlayer is often DDOL too
+		if (musicPlayer == null) musicPlayer = FindObjectOfType<BackgroundMusicPlayer>();
 		if (rewardManager == null) rewardManager = FindObjectOfType<RewardManager>();
 
 		if (hasPendingDataToApply && pendingDataToApply != null && scene.name == sceneToLoadAfterDataPrep)
@@ -76,13 +71,13 @@ public class GameDataManager : MonoBehaviour
 		}
 	}
 
+	// Sets up the data for a brand new game.
 	public void PrepareNewGame(int slotNumber, string gameSceneName)
 	{
 		CurrentSaveSlot = slotNumber;
 		sceneToLoadAfterDataPrep = gameSceneName;
 		SaveData newSave = new SaveData();
 
-		// Populate initial recipes from GameDataManager's own list
 		if (defaultInitialRecipes != null)
 		{
 			foreach (RecipeData recipe in defaultInitialRecipes)
@@ -95,7 +90,7 @@ public class GameDataManager : MonoBehaviour
 		}
 		else Debug.LogWarning("GameDataManager: 'defaultInitialRecipes' list not assigned in Inspector. New game might miss initial recipes.");
 
-		// Populate initial music from GameDataManager's own list
+
 		if (defaultInitialMusicTracks != null)
 		{
 			foreach (AudioClip track in defaultInitialMusicTracks)
@@ -107,12 +102,15 @@ public class GameDataManager : MonoBehaviour
 			}
 		}
 		else Debug.LogWarning("GameDataManager: 'defaultInitialMusicTracks' list not assigned in Inspector. New game might miss initial music.");
+
+
 		pendingDataToApply = newSave;
 		hasPendingDataToApply = true;
 		SaveCurrentDataToSlot(newSave);
 		Debug.Log($"GameDataManager: New game prepared for slot {CurrentSaveSlot}. Initial data created and saved. Will apply after scene '{gameSceneName}' loads.");
 	}
 
+	// Prepares to load game data from a specified save slot.
 	public bool PrepareLoadGameFromSlot(int slotNumber, string gameSceneName)
 	{
 		SaveData loadedData = SaveSystem.LoadGame(slotNumber);
@@ -129,6 +127,7 @@ public class GameDataManager : MonoBehaviour
 		return false;
 	}
 
+	// Applies loaded save data to the current game state and relevant managers.
 	private void ApplySaveDataToGameInternal(SaveData data)
 	{
 		if (data == null)
@@ -162,6 +161,7 @@ public class GameDataManager : MonoBehaviour
 		else Debug.LogWarning("GameDataManager: BackgroundMusicPlayer instance not found during ApplySaveDataToGameInternal.");
 	}
 
+	// Saves the current game state to the active save slot.
 	public void SaveActiveGameState()
 	{
 		if (CurrentSaveSlot == -1)
@@ -178,23 +178,27 @@ public class GameDataManager : MonoBehaviour
 		SaveCurrentDataToSlot(currentData);
 	}
 
+	// Helper method to save provided data to the current save slot.
 	private void SaveCurrentDataToSlot(SaveData dataToSave)
 	{
 		if (CurrentSaveSlot == -1) return;
 		SaveSystem.SaveGame(dataToSave, CurrentSaveSlot);
 	}
 
+	// Directly updates the total dishes completed count.
 	public void UpdateTotalDishesCompleted(int count)
 	{
 		TotalDishesCompleted = count;
 	}
 
+	// Increments the total dishes completed count by one.
 	public void IncrementDishesAndUpdate()
 	{
 		TotalDishesCompleted++;
 		Debug.Log($"GameDataManager: TotalDishesCompleted incremented to {TotalDishesCompleted}");
 	}
 
+	// Adds a recipe name to the list of unlocked recipes for the current session.
 	public void AddUnlockedRecipe(string recipeName)
 	{
 		if (!string.IsNullOrEmpty(recipeName) && !UnlockedRecipeNames.Contains(recipeName))
@@ -204,6 +208,7 @@ public class GameDataManager : MonoBehaviour
 		}
 	}
 
+	// Adds a music track name to the list of unlocked music for the current session.
 	public void AddUnlockedMusicTrack(string trackName)
 	{
 		if (!string.IsNullOrEmpty(trackName) && !UnlockedMusicTrackNames.Contains(trackName))
@@ -213,6 +218,7 @@ public class GameDataManager : MonoBehaviour
 		}
 	}
 
+	// Called when the application is about to quit.
 	void OnApplicationQuit()
 	{
 		Debug.Log("GameDataManager: OnApplicationQuit() called. Saving game state if a slot is active.");
