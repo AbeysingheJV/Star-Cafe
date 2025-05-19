@@ -68,7 +68,6 @@ Young adults today face significant stress, often lacking accessible, engaging r
 * **Cook/Process (on Stations):** Q key (can be a press or a hold depending on the station)
 * **Pause Game:** Escape (Esc) key
 
-*(Refer to the in-game Help menu for more detailed instructions if implemented).*
 
 ---
 
@@ -81,14 +80,6 @@ Young adults today face significant stress, often lacking accessible, engaging r
 * Structured system for collecting and viewing unlocked cat facts.
 * More detailed tutorial/onboarding for new players.
 * Refinements to UI/UX, including confirmation for overwriting save files.
-
----
-
-## Development Notes & Known Quirks
-
-* The save system uses `Application.persistentDataPath` to store save files in a "Saves" subfolder.
-* Reward milestones and individual awarded status (for pop-ups) are currently managed via a combination of `GameDataManager` (for core progress) and `PlayerPrefs` (for pop-up shown status).
-* The project uses specific layer names for interaction detection (e.g., "Pickupable", "IngredientSources", "CatLayer", "Counter1", "Counter2", "Radio", "Book"). These must be set up correctly in the Unity Editor's Tags and Layers settings.
 
 ---
 
